@@ -1,0 +1,65 @@
+Venerdì 11/05/2018 - Provati modulini NRF24L01 con due sketch Arduino presi da internet.
+Sul lato ricevitore, problemi con una funzione di ricezione che nella nuova libreria RF24 è stata cambiata.
+
+Lunedì 27/08/2018
+- Provato modulino SIM800L con alimentazione a 4.2V fornita da scheda XL4015. Ha funzionato bene per tutto il tempo, ovvero circa 3h di prove. Abbiamo quindi risolto il problema del reset continuo e di malfunzionamenti che si erano registrati usando la scheda originale con due diodi per passare da 5V a 4.2V.
+- Provati i comandi:
+	AT			per iniziare la comunicazione con il modulino grazie all'auto baud rate
+	AT+CGMM 	Nome del modulo
+	AT+CGMR		Codice del modulo
+	AT+CPIN?	sapere se è richesto il PIN
+	AT+CNUM		numero di telefono della SIM
+	AT+CSQ		signal quality (risposta: 10 senza antenna, 26 con antenna)
+	AT+CMGF=1	text mode, necessaria per leggere/inviare SMS
+	AT+CMGS="+39........" INVIO >messaggio CTRL-Z 	per inviare SMS
+	AT+CMGL="ALL"	legge tutti gli SMS
+tutti hanno dato esito positivo, utilizzando un convertitore USB-seriale e il software PUTTY con comunicazione COM4 115200.
+
+- Prova con ARDUINO e sketch seguente:
+		#include <SoftwareSerial.h>
+
+		String Arsp, Grsp;
+		SoftwareSerial gsm(10, 11); // RX, TX (on Arduino side)
+
+		void setup() {
+		  // put your setup code here, to run once:
+
+		  Serial.begin(9600);
+		  Serial.println("Testing GSM SIM800L");
+		  gsm.begin(4800);
+
+		}
+
+		void loop() {
+		  // put your main code here, to run repeatedly:
+
+		  if(gsm.available())
+		  {
+			Grsp = gsm.readString();
+			Serial.println(Grsp);
+		  }
+
+		  if(Serial.available())
+		  {
+			Arsp = Serial.readString();
+			gsm.println(Arsp);
+		  }
+
+		}
+
+si è rivelata fallimentare in quanto molto lenta. Inoltre la lettura di tutti i messaggi non si conclude del tutto (forse a causa della software serial che ha un buffer troppo limitato). La VDD del SIM800L (lato seriale) era attaccata ai 3.3V di ARDUINO. Anche con 5V funziona male.
+
+Abbiamo provato a 4800baud con putty e funziona benissimo.
+	AT+CMGL="REC UNREAD"	legge tutti gli SMS non ancora letti
+
+Abbiamo provato con la libreria NeoSwSerial al posto di SoftwareSerial ma non abbiamo ottenuto il miglioramento atteso. Ci siamo resi conto che quando si chiede la lettura di tutti i messaggi si superano gli 1.7kB rimanenti di memoria RAM di ARDUINO.
+Link utile per comparazione software serial: https://arduino.stackexchange.com/questions/26240/which-pins-of-an-arduino-uno-can-be-used-as-tx-and-rx-pins-for-connecting-to-gsm#26277
+
+Altri comandi provati: 
+	AT+CLTS=1;&W abilita il servizio di orologio dalla rete e con l'opzione &W ne fa un settaggio permanente del modem (anche dopo reset HW resta)
+	AT+CFUN=1,1		resetta il modulo via software
+	AT+CLTS?		controlla se il clock via rete è attivo
+	AT+CCLK?		restituisce ora corrente
+Link di riferimento: https://elementztechblog.wordpress.com/2016/12/28/getting-time-and-date-from-gsm-modem/
+	
+Ora,quindi, è sufficiente AT+CCLK?	per ottenere l'ora corrente dalla rete.
