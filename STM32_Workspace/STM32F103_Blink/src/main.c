@@ -82,7 +82,7 @@ int main(void)
 
   /* USER CODE BEGIN 2 */
   char rxFromPCBuff[4];
-  char rxFromSIM800Buff[50];
+  char rxFromSIM800Buff[100]={0};
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -96,8 +96,8 @@ int main(void)
 
 	  HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
 
-	  if(HAL_UART_Receive(&huart2,rxFromSIM800Buff,50,HAL_MAX_DELAY) == HAL_OK)
-			  HAL_UART_Transmit(&huart1,rxFromSIM800Buff,50,HAL_MAX_DELAY);
+	  HAL_UART_Receive(&huart2,rxFromSIM800Buff,100,2000);
+	  HAL_UART_Transmit(&huart1,rxFromSIM800Buff,100,2000);
 
 
 
