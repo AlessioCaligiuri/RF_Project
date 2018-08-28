@@ -81,7 +81,8 @@ int main(void)
   MX_USART2_UART_Init();
 
   /* USER CODE BEGIN 2 */
-
+  char rxFromPCBuff[4];
+  char rxFromSIM800Buff[50];
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -89,8 +90,17 @@ int main(void)
   while (1)
   {
   /* USER CODE END WHILE */
-	  HAL_Delay(100);
+
+	  if(HAL_UART_Receive(&huart1,rxFromPCBuff,4,HAL_MAX_DELAY) == HAL_OK)
+			  HAL_UART_Transmit(&huart2,rxFromPCBuff,4,HAL_MAX_DELAY);
+
 	  HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
+
+	  if(HAL_UART_Receive(&huart2,rxFromSIM800Buff,50,HAL_MAX_DELAY) == HAL_OK)
+			  HAL_UART_Transmit(&huart1,rxFromSIM800Buff,50,HAL_MAX_DELAY);
+
+
+
   /* USER CODE BEGIN 3 */
 
   }
