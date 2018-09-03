@@ -91,13 +91,14 @@ int main(void)
   {
   /* USER CODE END WHILE */
 
-	  if(HAL_UART_Receive(&huart1,rxFromPCBuff,4,HAL_MAX_DELAY) == HAL_OK)
-			  HAL_UART_Transmit(&huart2,rxFromPCBuff,4,HAL_MAX_DELAY);
+	  //if(HAL_UART_Receive(&huart1,rxFromPCBuff,4,HAL_MAX_DELAY) == HAL_OK)
+			  //HAL_UART_Transmit(&huart2,rxFromPCBuff,4,HAL_MAX_DELAY);
 
+	  HAL_Delay(500);
 	  HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
 
-	  HAL_UART_Receive(&huart2,rxFromSIM800Buff,100,2000);
-	  HAL_UART_Transmit(&huart1,rxFromSIM800Buff,100,2000);
+	  //HAL_UART_Receive(&huart2,rxFromSIM800Buff,100,2000);
+	  //HAL_UART_Transmit(&huart1,rxFromSIM800Buff,100,2000);
 
 
 

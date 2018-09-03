@@ -1,0 +1,28 @@
+#ifndef _STM32F1XX_EAC_UART_H
+#define	_STM32F1XX_EAC_UART_H
+
+#define EAC_FLAG_IS_EMPTY 0b00000001
+#define EAC_FLAG_IS_FULL 0b00000010
+#define EAC_FLAG_IS_OVERRUN 0b00000100
+#define EAC_FLAG_INIT	0b00000001
+
+#define	EAC_CIRCULARBUFFER_INIT(__buff__) {.buff=(__buff__), .read_index=0, .write_index=0, .status=EAC_FLAG_INIT}
+
+#include "stm32f1xx_hal.h"
+
+typedef struct EAC_CircularBuffer
+{
+	uint8_t* buff;
+	uint16_t read_index;
+	uint16_t write_index;
+	uint8_t status;
+} EAC_CircularBuffer_t;
+
+HAL_StatusTypeDef EAC_UART_Transmit_IT(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size);
+
+HAL_StatusTypeDef EAC_UART_Receive_IT(UART_HandleTypeDef *huart,
+		EAC_CircularBuffer_t *pCircularBuffer);
+
+void EAC_UART_IRQHandler(UART_HandleTypeDef *huart);
+
+#endif
