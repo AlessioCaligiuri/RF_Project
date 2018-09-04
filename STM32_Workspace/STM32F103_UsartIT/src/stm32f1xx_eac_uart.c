@@ -58,29 +58,51 @@ HAL_StatusTypeDef EAC_UART_Transmit_IT(UART_HandleTypeDef *huart, uint8_t *pData
 }
 
 /**
-  * @brief  Configs the reception of data in interrupt mode.
+  * @brief  Configs the reception of data in interrupt mode with a circular buffer.
+  * 		Allocates memory for buffer and enables interrupts.
   * @param  huart: Pointer to a UART_HandleTypeDef structure that contains
   *                the configuration information for the specified UART module.
-  * @param  pData: Pointer to circular buffer
+  * @param  dimensionBits: log_2(<buffer_dimension>). Examples:
+  * 				1 --> 2-bytes buffer
+  * 				2 --> 4-bytes buffer
+  * 				3 --> 8-bytes buffer
+  * 				4 --> 16-bytes buffer
+  * 				5 --> 32-bytes buffer
+  * 				6 --> 64-bytes buffer
+  * 				....
+  * 				10 --> 1024-bytes buffer
+  * 				...
   * @retval HAL status
   */
-HAL_StatusTypeDef EAC_UART_Receive_IT(UART_HandleTypeDef *huart,
-		EAC_CircularBuffer_t *pCircularBuffer)
+HAL_StatusTypeDef EAC_UART_Init_Rx(UART_HandleTypeDef *huart, uint8_t dimensionBits)
 {
+  if(dimensionBits > 15)
+  {
+	  return HAL_ERROR;
+  }
+  uint16_t dimension = (1<<dimensionBits);
+  uint8_t* pBuffer = malloc(dimension*sizeof(uint8_t));
+  if(pBuffer == NULL)
+  {
+	  return HAL_ERROR;
+  }
+  EAC_CircularBuffer_t* pCircularBuffer = (EAC_CircularBuffer_t*)malloc(sizeof(EAC_CircularBuffer_t));
+  if(pCircularBuffer == NULL)
+  {
+	  return HAL_ERROR;
+  }
+
+  pCircularBuffer->buff = pBuffer;
+  pCircularBuffer->buffDimension = dimension;
+  pCircularBuffer->read_index = 0;
+  pCircularBuffer->write_index = 0;
+  pCircularBuffer->status = EAC_FLAG_INIT;
+
   uint32_t tmp_state = 0;
 
   tmp_state = huart->State;
   if((tmp_state == HAL_UART_STATE_READY) || (tmp_state == HAL_UART_STATE_BUSY_TX))
   {
-    if(pCircularBuffer == NULL)
-    {
-      return HAL_ERROR;
-    }
-    if(pCircularBuffer->buff == NULL)
-    {
-    	return HAL_ERROR;
-    }
-
     /* Process Locked */
     __HAL_LOCK(huart);
 
@@ -117,6 +139,88 @@ HAL_StatusTypeDef EAC_UART_Receive_IT(UART_HandleTypeDef *huart,
   {
     return HAL_BUSY;
   }
+}
+
+/**
+ * @brief	De-initializes the reception of data in interrupt mode with a circular buffer.
+ * 			Frees memory of buffer and disables interrupts.
+ * @param  	huart: Pointer to a UART_HandleTypeDef structure that contains
+ *				   the configuration information for the specified UART module.
+ * @retval HAL status
+ */
+HAL_StatusTypeDef EAC_UART_DeInit_Rx(UART_HandleTypeDef *huart)
+{
+	HAL_StatusTypeDef tmp_state = huart->State;
+
+	/* Check if the HAL is in the RX state */
+	if((tmp_state == HAL_UART_STATE_BUSY_TX_RX) || (tmp_state == HAL_UART_STATE_BUSY_RX))
+	{
+	    /* Disable the UART Parity Error Interrupt */
+	    __HAL_UART_DISABLE_IT(huart, UART_IT_PE);
+
+	    /* Disable the UART Error Interrupt: (Frame error, noise error, overrun error) */
+	    __HAL_UART_DISABLE_IT(huart, UART_IT_ERR);
+
+	    /* Disable the UART Data Register not empty Interrupt */
+	    __HAL_UART_DISABLE_IT(huart, UART_IT_RXNE);
+
+		/* Process Locked */
+		__HAL_LOCK(huart);
+		EAC_CircularBuffer_t* pCircularBuffer = (EAC_CircularBuffer_t*)(huart->pRxBuffPtr);
+		free(pCircularBuffer->buff);
+		free(pCircularBuffer);
+
+		/* Update the HAL state */
+		if(huart->State == HAL_UART_STATE_BUSY_TX_RX)
+		{
+			huart->State = HAL_UART_STATE_BUSY_TX;
+		}
+		else
+		{
+			huart->State = HAL_UART_STATE_READY;
+		}
+
+		/* Process Unlocked */
+		__HAL_UNLOCK(huart);
+
+		return HAL_OK;
+	}
+	else
+	{
+		return HAL_ERROR;
+	}
+}
+
+/**
+ * @brief	Gets the last received byte, if present, and remove it from the circular buffer.
+ * @param  	huart: Pointer to a UART_HandleTypeDef structure that contains
+ *				   the configuration information for the specified UART module.
+ * @param 	rxByte: Pointer to the variable where store the last received byte.
+ * 					Not modified if no byte available.
+ * @retval	0 if no byte available; 1 if byte polled.
+ */
+int EAC_UART_DequeueRxByte(UART_HandleTypeDef *huart, uint8_t* rxByte)
+{
+	EAC_CircularBuffer_t* circularBuffer = ((EAC_CircularBuffer_t*)(huart->pRxBuffPtr));
+	uint16_t* readIdx = &(circularBuffer->read_index);
+
+	//If empty buffer
+	if(EAC_TEST_FLAG(circularBuffer->status,EAC_FLAG_IS_EMPTY))
+	{
+		return 0;
+	}
+	else //if not empty buffer
+	{
+		uint8_t data = circularBuffer->buff[*readIdx];
+		(*readIdx)++;
+		(*readIdx)&=(circularBuffer->buffDimension - 1);
+		if(*readIdx == (circularBuffer->write_index))
+		{
+			EAC_SET_FLAG(circularBuffer->status,EAC_FLAG_IS_EMPTY);
+		}
+		*rxByte = data;
+		return 1;
+	}
 }
 
 /**
@@ -197,7 +301,7 @@ void EAC_UART_IRQHandler(UART_HandleTypeDef *huart)
 }
 
 /**
-  * @brief  Receives an amount of data in non blocking mode
+  * @brief  To call in RXNE event. Receives a byte and adds it to the circular buffer.
   * @param  huart: Pointer to a UART_HandleTypeDef structure that contains
   *                the configuration information for the specified UART module.
   * @retval HAL status
@@ -241,7 +345,7 @@ static HAL_StatusTypeDef _UART_Receive_IT(UART_HandleTypeDef *huart)
         	  buff_ptr[*write_idx] =
         			  (uint8_t)(huart->Instance->DR & (uint8_t)0x00FF);
         	  (*write_idx)++;
-        	  (*write_idx)&=(sizeof(buff_ptr) - 1);
+        	  (*write_idx)&=(circBuff->buffDimension - 1);
         	  //clear empty flag
         	  *status &= !EAC_FLAG_IS_EMPTY;
 
@@ -264,7 +368,6 @@ static HAL_StatusTypeDef _UART_Receive_IT(UART_HandleTypeDef *huart)
       }
     }
 
-    // __HAL_UART_DISABLE_IT(huart, UART_IT_RXNE);
     return HAL_OK;
   }
   else

@@ -63,9 +63,7 @@ void Error_Handler(void);
 
 int main(void)
 {
-	uint8_t buff[512];
   /* USER CODE BEGIN 1 */
-	EAC_CircularBuffer_t circBuff = EAC_CIRCULARBUFFER_INIT(buff);
   /* USER CODE END 1 */
 
   /* MCU Configuration----------------------------------------------------------*/
@@ -82,7 +80,7 @@ int main(void)
   MX_USART2_UART_Init();
 
   /* USER CODE BEGIN 2 */
-  EAC_UART_Receive_IT(&huart1,&circBuff);
+  EAC_UART_Init_Rx(&huart1,9); //buffer of 512 bytes
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -90,15 +88,11 @@ int main(void)
   while (1)
   {
   /* USER CODE END WHILE */
-	  if(!(circBuff.status & EAC_FLAG_IS_EMPTY))
-		{
-		  EAC_UART_Transmit_IT(&huart1,circBuff.buff[circBuff.read_index],1);
-		  circBuff.read_index++;
-		  if(circBuff.read_index == circBuff.write_index)
-		  {
-			  circBuff.status |= EAC_FLAG_IS_EMPTY;
-		  }
-		}
+	  uint8_t rxByte;
+	  if(EAC_UART_DequeueRxByte(&huart1,&rxByte))
+	  {
+		EAC_UART_Transmit_IT(&huart1,&rxByte,1);
+	  }
   }
   /* USER CODE END 3 */
 
