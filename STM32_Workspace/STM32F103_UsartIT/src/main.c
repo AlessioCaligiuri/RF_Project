@@ -89,11 +89,17 @@ int main(void)
   while (1)
   {
   /* USER CODE END WHILE */
-	  uint8_t rxByte;
-	  if(EAC_UART_DequeueRxByte(&huart1,&rxByte))
+
+	  HAL_Delay(10000);
+	  HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
+
+	  uint8_t rxByte[512];
+	  int cnt = 0;
+	  while(EAC_UART_DequeueRxByte(&huart1,&(rxByte[cnt])))
 	  {
-		EAC_UART_Transmit_IT(&huart1,&rxByte,1);
+		  cnt++;
 	  }
+	  EAC_UART_Transmit_IT(&huart1,rxByte,cnt);
   }
 
   //EAC_UART_Stop_Rx(&huart1);

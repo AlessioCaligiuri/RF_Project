@@ -232,6 +232,7 @@ int EAC_UART_DequeueRxByte(UART_HandleTypeDef *huart, uint8_t* rxByte)
   * @param  huart: Pointer to a UART_HandleTypeDef structure that contains
   *                the configuration information for the specified UART module.
   * @retval None
+  * @note	To insert in the default IRQ handler (replacing the HAL_UART_IRQHandler).
   */
 void EAC_UART_IRQHandler(UART_HandleTypeDef *huart)
 {
