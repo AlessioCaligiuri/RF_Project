@@ -1,5 +1,6 @@
 #include "stm32f1xx_eac_uart.h"
 #include "stm32f1xx_hal.h"
+#include <stdlib.h>
 
 static HAL_StatusTypeDef _UART_Transmit_IT(UART_HandleTypeDef *huart);
 static HAL_StatusTypeDef _UART_EndTransmit_IT(UART_HandleTypeDef *huart);
@@ -74,18 +75,21 @@ HAL_StatusTypeDef EAC_UART_Transmit_IT(UART_HandleTypeDef *huart, uint8_t *pData
   * 				...
   * @retval HAL status
   */
-HAL_StatusTypeDef EAC_UART_Init_Rx(UART_HandleTypeDef *huart, uint8_t dimensionBits)
+HAL_StatusTypeDef EAC_UART_Start_Rx(UART_HandleTypeDef *huart, uint8_t dimensionBits)
 {
   if(dimensionBits > 15)
   {
 	  return HAL_ERROR;
   }
+
   uint16_t dimension = (1<<dimensionBits);
-  uint8_t* pBuffer = malloc(dimension*sizeof(uint8_t));
+
+  uint8_t* pBuffer = (uint8_t*)malloc(dimension * sizeof(uint8_t));
   if(pBuffer == NULL)
   {
 	  return HAL_ERROR;
   }
+
   EAC_CircularBuffer_t* pCircularBuffer = (EAC_CircularBuffer_t*)malloc(sizeof(EAC_CircularBuffer_t));
   if(pCircularBuffer == NULL)
   {
@@ -106,7 +110,7 @@ HAL_StatusTypeDef EAC_UART_Init_Rx(UART_HandleTypeDef *huart, uint8_t dimensionB
     /* Process Locked */
     __HAL_LOCK(huart);
 
-    huart->pRxBuffPtr = pCircularBuffer;
+    huart->pRxBuffPtr = (uint8_t*)pCircularBuffer;
     //huart->RxXferSize = Size;
     //huart->RxXferCount = Size;
 
@@ -148,7 +152,7 @@ HAL_StatusTypeDef EAC_UART_Init_Rx(UART_HandleTypeDef *huart, uint8_t dimensionB
  *				   the configuration information for the specified UART module.
  * @retval HAL status
  */
-HAL_StatusTypeDef EAC_UART_DeInit_Rx(UART_HandleTypeDef *huart)
+HAL_StatusTypeDef EAC_UART_Stop_Rx(UART_HandleTypeDef *huart)
 {
 	HAL_StatusTypeDef tmp_state = huart->State;
 
@@ -202,7 +206,7 @@ HAL_StatusTypeDef EAC_UART_DeInit_Rx(UART_HandleTypeDef *huart)
 int EAC_UART_DequeueRxByte(UART_HandleTypeDef *huart, uint8_t* rxByte)
 {
 	EAC_CircularBuffer_t* circularBuffer = ((EAC_CircularBuffer_t*)(huart->pRxBuffPtr));
-	uint16_t* readIdx = &(circularBuffer->read_index);
+	volatile uint16_t* readIdx = &(circularBuffer->read_index);
 
 	//If empty buffer
 	if(EAC_TEST_FLAG(circularBuffer->status,EAC_FLAG_IS_EMPTY))
@@ -333,11 +337,11 @@ static HAL_StatusTypeDef _UART_Receive_IT(UART_HandleTypeDef *huart)
     {
       if(huart->Init.Parity == UART_PARITY_NONE)
       {
-    	  EAC_CircularBuffer_t* circBuff = (EAC_CircularBuffer_t*)(*huart->pRxBuffPtr);
-    	  uint16_t *read_idx = &(circBuff->read_index);
-    	  uint16_t *write_idx = &(circBuff->write_index);
+    	  EAC_CircularBuffer_t* circBuff = (EAC_CircularBuffer_t*)(huart->pRxBuffPtr);
+    	  volatile uint16_t *read_idx = &(circBuff->read_index);
+    	  volatile uint16_t *write_idx = &(circBuff->write_index);
     	  uint8_t *buff_ptr = (circBuff->buff);
-    	  uint8_t *status = &(circBuff->status);
+    	  volatile uint8_t *status = &(circBuff->status);
 
     	  //check if already full
     	  if(!(*status & EAC_FLAG_IS_FULL))

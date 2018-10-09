@@ -17,7 +17,7 @@
 typedef struct EAC_CircularBuffer
 {
 	uint16_t buffDimension;
-	volatile uint8_t* buff;
+	uint8_t* buff;
 	volatile uint16_t read_index;
 	volatile uint16_t write_index;
 	volatile uint8_t status;
@@ -25,7 +25,9 @@ typedef struct EAC_CircularBuffer
 
 HAL_StatusTypeDef EAC_UART_Transmit_IT(UART_HandleTypeDef *huart, uint8_t *pData, uint16_t Size);
 
-HAL_StatusTypeDef EAC_UART_Init_Rx(UART_HandleTypeDef *huart, uint8_t dimensionBits);
+HAL_StatusTypeDef EAC_UART_Start_Rx(UART_HandleTypeDef *huart, uint8_t dimensionBits);
+
+HAL_StatusTypeDef EAC_UART_Stop_Rx(UART_HandleTypeDef *huart);
 
 int EAC_UART_DequeueRxByte(UART_HandleTypeDef *huart, uint8_t* rxByte);
 

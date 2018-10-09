@@ -36,6 +36,7 @@
 #include "usart.h"
 #include "gpio.h"
 #include "stm32f1xx_eac_uart.h"
+//#include "stm32f1xx_eac_uart.h"
 
 /* USER CODE BEGIN Includes */
 
@@ -80,7 +81,7 @@ int main(void)
   MX_USART2_UART_Init();
 
   /* USER CODE BEGIN 2 */
-  EAC_UART_Init_Rx(&huart1,9); //buffer of 512 bytes
+  EAC_UART_Start_Rx(&huart1,9); //buffer of 512 bytes
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -94,6 +95,8 @@ int main(void)
 		EAC_UART_Transmit_IT(&huart1,&rxByte,1);
 	  }
   }
+
+  //EAC_UART_Stop_Rx(&huart1);
   /* USER CODE END 3 */
 
 }
