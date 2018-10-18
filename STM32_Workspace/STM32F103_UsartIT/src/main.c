@@ -81,7 +81,10 @@ int main(void)
   MX_USART2_UART_Init();
 
   /* USER CODE BEGIN 2 */
-  EAC_UART_Start_Rx(&huart1,9); //buffer of 512 bytes
+  EAC_UART_Start_Rx(&huart1,9); //buffer of 512 bytes - PC serial
+  EAC_UART_Start_Rx(&huart2,9); //SIM800 Serial
+  HAL_StatusTypeDef tx_serialPC_status = HAL_OK;
+  HAL_StatusTypeDef tx_serialSIM_status = HAL_OK;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -90,16 +93,35 @@ int main(void)
   {
   /* USER CODE END WHILE */
 
-	  HAL_Delay(10000);
-	  HAL_GPIO_TogglePin(LD2_GPIO_Port,LD2_Pin);
+	  uint8_t rxByte_fromPC[512];
+	  uint8_t rxByte_fromSIM800[512];
+	  int cnt_fromPC = 0;
+	  int cnt_fromSIM800 = 0;
 
-	  uint8_t rxByte[512];
-	  int cnt = 0;
-	  while(EAC_UART_DequeueRxByte(&huart1,&(rxByte[cnt])))
+	  //Todo: Handle HAL_ERROR case
+
+	  /*** From PC to SIM ***/
+	  if(tx_serialSIM_status == HAL_OK)
 	  {
-		  cnt++;
+		  while(EAC_UART_DequeueRxByte(&huart1,&(rxByte_fromPC[cnt_fromPC])))
+		  {
+			  cnt_fromPC++;
+		  }
 	  }
-	  EAC_UART_Transmit_IT(&huart1,rxByte,cnt);
+	  if(cnt_fromPC > 0) //transmit only if something to transmit is present
+		  tx_serialSIM_status = EAC_UART_Transmit_IT(&huart2,rxByte_fromPC,cnt_fromPC);
+
+
+	  /*** From SIM to PC ***/
+	  if(tx_serialPC_status == HAL_OK)
+	  {
+		  while(EAC_UART_DequeueRxByte(&huart2,&(rxByte_fromSIM800[cnt_fromSIM800])))
+		  {
+			  cnt_fromSIM800++;
+		  }
+	  }
+	  if(cnt_fromSIM800 > 0)
+		  tx_serialPC_status = EAC_UART_Transmit_IT(&huart1,rxByte_fromSIM800,cnt_fromSIM800);
   }
 
   //EAC_UART_Stop_Rx(&huart1);
