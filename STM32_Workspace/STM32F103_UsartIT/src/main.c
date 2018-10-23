@@ -59,7 +59,10 @@ void Error_Handler(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
-
+int tx_toPC_Completed = 1;
+int tx_toSIM_Completed = 1;
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart);
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart);
 /* USER CODE END 0 */
 
 int main(void)
@@ -83,8 +86,11 @@ int main(void)
   /* USER CODE BEGIN 2 */
   EAC_UART_Start_Rx(&huart1,9); //buffer of 512 bytes - PC serial
   EAC_UART_Start_Rx(&huart2,9); //SIM800 Serial
-  HAL_StatusTypeDef tx_serialPC_status = HAL_OK;
-  HAL_StatusTypeDef tx_serialSIM_status = HAL_OK;
+
+  uint8_t rxByte_fromPC[512] = {0};
+  uint8_t rxByte_fromSIM800[512] = {0};
+  int cnt_fromPC = 0;
+  int cnt_fromSIM800 = 0;
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -93,40 +99,80 @@ int main(void)
   {
   /* USER CODE END WHILE */
 
-	  uint8_t rxByte_fromPC[512];
-	  uint8_t rxByte_fromSIM800[512];
-	  int cnt_fromPC = 0;
-	  int cnt_fromSIM800 = 0;
-
 	  //Todo: Handle HAL_ERROR case
 
 	  /*** From PC to SIM ***/
-	  if(tx_serialSIM_status == HAL_OK)
+	  //tmp_state1 = huart1.State;
+	  //if((tmp_state1 == HAL_UART_STATE_READY) || (tmp_state1 == HAL_UART_STATE_BUSY_RX))
+	  if(tx_toSIM_Completed)
 	  {
 		  while(EAC_UART_DequeueRxByte(&huart1,&(rxByte_fromPC[cnt_fromPC])))
 		  {
-			  cnt_fromPC++;
+			  if(cnt_fromPC < 512)
+			  {
+				  cnt_fromPC++;
+			  }
+			  else
+			  {
+				  cnt_fromPC = 512;
+			  }
 		  }
-	  }
-	  if(cnt_fromPC > 0) //transmit only if something to transmit is present
-		  tx_serialSIM_status = EAC_UART_Transmit_IT(&huart2,rxByte_fromPC,cnt_fromPC);
+		  if(cnt_fromPC > 0) //transmit only if something to transmit is present
+		  {
+			  tx_toSIM_Completed = 0;
+			  EAC_UART_Transmit_IT(&huart2,rxByte_fromPC,cnt_fromPC);
+			  cnt_fromPC = 0;
+		  }
 
+	  }
 
 	  /*** From SIM to PC ***/
-	  if(tx_serialPC_status == HAL_OK)
+	  //tmp_state2 = huart2.State;
+	  //if((tmp_state2 == HAL_UART_STATE_READY) || (tmp_state2 == HAL_UART_STATE_BUSY_RX))
+	  if(tx_toPC_Completed)
 	  {
 		  while(EAC_UART_DequeueRxByte(&huart2,&(rxByte_fromSIM800[cnt_fromSIM800])))
 		  {
-			  cnt_fromSIM800++;
+			  if(cnt_fromSIM800 < 512)
+			  {
+				  cnt_fromSIM800++;
+			  }
+			  else
+			  {
+				  cnt_fromSIM800 = 512;
+			  }
+
+		  }
+		  if(cnt_fromSIM800 > 0)
+		  {
+			  tx_toPC_Completed = 0;
+			  EAC_UART_Transmit_IT(&huart1,rxByte_fromSIM800,cnt_fromSIM800);
+			  cnt_fromSIM800 = 0;
 		  }
 	  }
-	  if(cnt_fromSIM800 > 0)
-		  tx_serialPC_status = EAC_UART_Transmit_IT(&huart1,rxByte_fromSIM800,cnt_fromSIM800);
+
   }
 
   //EAC_UART_Stop_Rx(&huart1);
   /* USER CODE END 3 */
 
+}
+
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart)
+{
+	if(huart == &huart1) //uart PC
+		tx_toPC_Completed = 1;
+	if(huart == &huart2) //uart SIM800
+		tx_toSIM_Completed = 1;
+	return;
+}
+
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+	huart->ErrorCode = 0;
+	EAC_UART_Stop_Rx(huart);
+	EAC_UART_Start_Rx(huart,9); //buffer of 512 bytes
 }
 
 /** System Clock Configuration

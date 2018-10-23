@@ -63,3 +63,8 @@ Altri comandi provati:
 Link di riferimento: https://elementztechblog.wordpress.com/2016/12/28/getting-time-and-date-from-gsm-modem/
 	
 Ora,quindi, è sufficiente AT+CCLK?	per ottenere l'ora corrente dalla rete.
+
+2018.10.24 
+Siamo riusciti a far funzionare il firmware: avviene una comunicazione bidirezionale tra PC-STM32-SIM800L basata su UART in interrupt mode e buffer circolare per la ricezione; aggiunte callback alla fine della trasmissione.
+Pare funzionare ma resta da gestire l'eventualità di errori nella comunicazione, che con l'attuale error handler non vengono resettati opportunamente.
+Ci siamo accorti che se l'antenna del SIM800L è vicina ai collegamenti con STM32, si ha sempre FE durante la ricezione di chiamate o SMS, che per il suddetto motivo manda in palla il sistema.
