@@ -68,3 +68,102 @@ Ora,quindi, è sufficiente AT+CCLK?	per ottenere l'ora corrente dalla rete.
 Siamo riusciti a far funzionare il firmware: avviene una comunicazione bidirezionale tra PC-STM32-SIM800L basata su UART in interrupt mode e buffer circolare per la ricezione; aggiunte callback alla fine della trasmissione.
 Pare funzionare ma resta da gestire l'eventualità di errori nella comunicazione, che con l'attuale error handler non vengono resettati opportunamente.
 Ci siamo accorti che se l'antenna del SIM800L è vicina ai collegamenti con STM32, si ha sempre FE durante la ricezione di chiamate o SMS, che per il suddetto motivo manda in palla il sistema.
+
+2018.11.06
+Stiamo provando ad utilizzare un modulino NRF24L01 con STM32. Abbiamo problemi con la sequenza di power up, dove viene scritto un registro ma poi, alla rilettura, non risulta settato correttamente.
+Abbiamo capito che ogni NRF24L01 consente di cambiare canale (quindi frequenza, attorno ai 2.4GHz, grazie ad un registro RF_CH) e sullo stesso canale è possibile assegnare vari indirizzi. Non abbiamo ben capito cosa siano le "pipe".
+Stiamo provando a usare: https://github.com/r2aiv/NRF24L01-1
+
+2018.11.08
+Stiamo leggendo il datasheet e siamo arrivati a pagina 29/75.
+
+
+Datasheet NRF24L01
+	- Enhanced ShockBurst (ESB) - motore di protocollo in banda base integrato nel chip
+		- comunicazione a pacchetti
+		- operazioni manuali o avanzate autonome
+		- gestisce tutte le operazioni a livello link
+		- lunghezza payload dinamica da 1 a 32 byte
+		- 6 data pipe (MultiCeiver) per connessioni a stella 1:6
+	- Opera in banda ISM (Industrial Scientific Medical) da 2.4GHz a 2,525 GHZ (126 canali).
+	- Mappa registri via SPI sempre accessibile
+	- FIFO interne assicurano buon flusso dati tra radio e MCU
+	- Front-end radio:
+		- Modulazione GFSK (Gaussian Frequency Shift Keying) - è una modulazione FSK nella quale gli impulsi corrispondenti al dato digitale vengono "smussati" con un filtro graussiano prima di essere inviati al modulatore vero e proprio; in questo modo l'occupazione di banda viene ridotta (minori bande laterali attorno alla portante) ma aumenta l'interferenza inter-simbolica.
+		- Configurabili: frequenza - 126 canali, potenza in uscita (0 -6 -12 -18 dBm) e data-rate in aria (250kBit/s, 1MBit/s, 2MBit/s)
+	- Due modalità di risparmio di potenza; adatto per ultra-low power designs
+	- Il "+" è compatibile con....ù
+	- Gestione dell'alimentazione:
+		- varie modalità: power-down, standby-I
+		- 1.5ms power-down to power up
+	- Interfaccia HOST
+		- SPI 4 pin, max 10Mbit/s, 3FIFO TX/RX da 32byte (tot 6 FIFO)
+		- Pin 5V tolerant (ma alimentazione da 1.9V a 3.6V)
+	- PIN:
+		- SPI usa MISO MOSI SCK CSN
+		- CE attiva RX o TX
+		- IRQ uscita interrupt attivo basso
+---> da capire "power on reset" (5.7)
+
+RADIO CONTROL
+	- macchina a stati interna; prende input dai valori di registro definiti dall'utente e dai segnali interni
+	- modi operativi:
+		- power down ---> modulino disabilitato; valori dei registri mantenuti, SPI tenuta attiva e registri accessibili; ci si va con PWR_UP = 0 nel registro CONFIG;
+		- standby; 
+			- standby-I ---> ci si va con PWR_UP = 1 (e mantenendo il pin CE = 0); lo scopo è avere dei tempi di startup brevi pur non consumando troppo; qui solo una parte dell'oscillatore a cristallo è attivo;
+			- standby-II ---> consuma un po' più di corrente; ci si va quando un PTX (Primary TX) ha buffer di TX vuoto e CE = 1; se la TX FIFO viene riempita, si torna in TX (130us per far ripartire PLL);
+		- RX ---> ci si va da standby-I mettendo CE = 1 e PRIM_RX = 1 (ovviamente PWR_UP = 1); modulino come ricevitore: demodula i segnali dal canale RF presentando constantemente i dati in arrivo al "protocol engine". Esso ricerca costanemente per un pacchetto valido:
+			- CRC valido
+			- indirizzo corretto
+			pacchetto valido ------> il payload è messo in una RX FIFO (se piene pacchetto è perduto).
+nostra ipotesi: il "protocol engine" può commutare su modalità TX tramite le modalità automatiche del ESB ad esempio per ritrasmettere pacchetto a seguito di ricezione NACK
+			- in RX si ha segnale RPD (Received Power Detector), che se alto, indica che c'è del segnale RF nel canale selezionato.
+		
+		- TX ---> ci si va da standby-I mettendo PRIM_RX = 0 (ovviamente PWR_UP = 1), un payload nella TX FIFO e un impulso su CE di almeno 10us; si usa per trasmettere e vi resta finché il pacchetto corrente non è stato trasmesso; dopodiché se CE = 0, passa in standby-I.
+		Il modulino non deve restare in TX per più di 4ms (probabilmente per ragioni legate al PLL che opera in open loop); l'ESB rispetta questo vincolo.
+		
+		La tabella 15 (pag. 23) mostra un riassunto di come configurare queste modalità.
+		
+		Il modulino non ha memoria non volatile e se viene rimossa la VDD il contenuto dei registri va perduto.
+	All'accensione, quando la VDD supera 1.9V, il modulino si mette in stato "power on reset" che dura al massimo 100ms, per poi andare automaticamente in "power down".
+	Per andare in Standby devo porre PWR_UP = 1 nel registro di configurazione, dopodiché attendere 1.5ms.
+	A questo punto, per fare ricezione o trasmissione devo mettere CE = 1 e scelgo TX/RX con PRIM_RX ( =0 --> TX).
+	
+	- air data rate
+		si imposta con RF_DR nel registro RF_SETUP; il ricevitore e il trasmettitore devono avere stessa ADR per poter comunicare insieme.
+	- canale in frequenza
+		ogni canale occupa meno di 1MHz (250kbps, 1Mbps) o meno di 2MHz (2Mbps);
+		risoluzione di scelta del canale: 1MHz;
+		
+		F0 = 2400 + RF_CH [MHz]
+		
+	- power amplifier controlla
+		usato per impostare potenza in tx (4 scelte possibili)
+		
+ENHANCED SHOCK-BURST
+E' un datalink layer basato su pacchetti; assembla e temporizza i pacchetti e gestisce ACK e ritrasmissione.
+	- 1 - 32 byte payload
+	- auto ACK con payload e auto-retransmit
+	- 6 data pipe per reti a stella 1:6
+	
+ESB fornisce comunicazione bidirezionale affidabile in modo semplice.
+Una transazione di pacchetto con ESB prevede la presenza di un PRX e di un PTX; inizia con trasmissione da PTX e finisce quando il PTX riceve un ACK dal PRX (il quale può restiuire assieme all'ACK anche dati ---> comunicazione bidirezionale).
+ESB quindi gestisce PTX e PRX facendoli automaticamente commutare da modo TX a modo RX e viceversa. Tutto però parte con una TX dal PTX.
+Si possono configurare max numero ritrasmissioni e ritardo tra una e l'altra.
+		
+	- Struttura pacchetto:
+		- preambolo 01010101 = 85d (se primo bit indirizzo è 0) oppure 10101010 = 170d (se primo bit indirizzo è 1); serve per stabilizzare ricevitore;
+		- indirizzo per il ricevitore; si può configurare la sua lunghezza tra 3, 4, 5 byte con il registro AW; non usare sequenze con una sola transizione tipo 000FFFFFh oppure con tutte transizioni (tipo preambolo)
+		- campo "packet control" (9 bit); contiene lunghezza del payload (usato solo se è abilitata la "dynamic payload length - Se è 0 vuol dire vuoto e si usa per mandare solo ACK), identificativo pacchetto (PID - utile per far capire al PRX se il pacchetto è una ritrasmissione (stesso PID) oppure un pacchetto nuovo) e un bit di flag NO_ACK (usato solo se autoACK è attivo).
+		-----> nota su NO_ACK; se NO_ACK = 1, vuol dire che questo pacchetto non deve essere acknowledge (il ricevitore non deve dire "io l'ho ricevuto")
+		- CRC da 1 o 2 byte.
+	
+	- Gestione automatica del pacchetto:
+		- lunghezza del payload statica (di default) o dinamica
+			- statica: il TX riempie adeguatamente la FIFO, mentre l'RX ha un registro (RX_PW_Px) per indicare la lunghezza; le due devono essere coerenti.
+			- dinamica: l'RX può decodificare automaticamente perché l'info sulla lunghezza è contenuta nel pacchetto; la MCU può chiedere al modulino RX la lunghezza del pacchetto con il comando R_RX_PL_WID; per abilitarla EN_DPL = 1 nel registro FEATURE sia del tx che del rx; inoltre impostazione registro DYNPD (Vedi pag. 29).
+		- assemblamento, validazione, disassemblamento automatici
+		
+		
+	
+		
