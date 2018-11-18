@@ -36,9 +36,12 @@
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
+#include "stm32f1xx_eac_uart.h"
+#include "nrf24l01.h"
+#include <stdbool.h>
 
 /* USER CODE BEGIN Includes */
-
+#define	USART1_BUFFER_LENGTH	512
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -58,6 +61,59 @@ void Error_Handler(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
+
+static SIM_Parser_t simParser;
+static uint8_t rxByte_fromPC = 0;
+static bool is_txToPC_Completed = 0;
+
+/* Data for NRF24L01 module */
+static const uint8_t rx_address[5] = {1, 2, 3, 4, 5};
+static const uint8_t tx_address[5] = {1, 2, 3, 4, 6};
+nrf24l01 nrf;
+
+/* Function for 2.4GHz module init */
+void nrf24l01_setup()
+{
+	uint32_t rx_data;
+	nrf24l01_config config;
+	config.data_rate        = NRF_DATA_RATE_1MBPS;
+	config.tx_power         = NRF_TX_PWR_0dBm;
+	config.crc_width        = NRF_CRC_WIDTH_1B;
+	config.addr_width       = NRF_ADDR_WIDTH_5;
+	config.payload_length   = 32;    // maximum is 32 bytes
+	config.retransmit_count = 15;   // maximum is 15 times
+	config.retransmit_delay = 0x0F; // 4000us, LSB:250us
+	config.rf_channel       = 0;
+	config.rx_address       = rx_address;
+	config.tx_address       = tx_address;
+	config.rx_buffer        = (uint8_t*)&rx_data;
+
+	config.spi         = &hspi1;
+	config.spi_timeout = 10; // milliseconds
+	config.ce_port     = NRF_CE_GPIO_Port;
+	config.ce_pin      = NRF_CE_Pin;
+	config.irq_port    = NRF_IRQ_GPIO_Port;
+	config.irq_pin     = NRF_IRQ_Pin;
+	config.csn_port	 = NRF_CSN_GPIO_Port;
+	config.csn_pin	 = NRF_CSN_Pin;
+
+	nrf_init(&nrf, &config);
+ }
+
+/* Callback for NRF24 IRQ */
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	nrf_irq_handler(&nrf);
+}
+
+/* Callback for UART transmission completed */
+void HAL_UART_txCpltCallback(UART_HandleTypeDef* huart)
+{
+	if(huart == huart1)
+		is_txToPC_Completed = 1;
+
+	return;
+}
 
 /* USER CODE END 0 */
 
@@ -83,6 +139,9 @@ int main(void)
   MX_USART2_UART_Init();
 
   /* USER CODE BEGIN 2 */
+  nrf24l01_setup();
+  SIM_Parser_init(&simParser);
+  EAC_UART_Start_Rx(&huart1,9);
 
   /* USER CODE END 2 */
 
@@ -91,6 +150,39 @@ int main(void)
   while (1)
   {
   /* USER CODE END WHILE */
+	  while(EAC_UART_DequeueRxByte(&huart1,&rxByte_fromPC))
+	  {
+		  if(simParser.isCompleted)
+			  break;
+
+		  SIM_Parser_update(&simParser,rxByte_fromPC);
+	  }
+
+	  /* Semantic parser */
+	  if(simParser.isCompleted)
+	  {
+		  EAC_UART_Transmit_IT(&huart1,simParser.cmd,strlen(simParser.cmd));
+		  while(!is_txToPC_Completed);
+		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+		  while(!is_txToPC_Completed);
+		  EAC_UART_Transmit_IT(&huart1,simParser.field1,strlen(simParser.field1));
+		  while(!is_txToPC_Completed);
+		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+		  while(!is_txToPC_Completed);
+		  EAC_UART_Transmit_IT(&huart1,simParser.field2,strlen(simParser.field2));
+		  while(!is_txToPC_Completed);
+		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+		  while(!is_txToPC_Completed);
+		  EAC_UART_Transmit_IT(&huart1,simParser.field3,strlen(simParser.field3));
+		  while(!is_txToPC_Completed);
+		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+		  while(!is_txToPC_Completed);
+		  EAC_UART_Transmit_IT(&huart1,simParser.text,strlen(simParser.text));
+		  while(!is_txToPC_Completed);
+		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+		  while(!is_txToPC_Completed);
+	  }
+
 
   /* USER CODE BEGIN 3 */
 

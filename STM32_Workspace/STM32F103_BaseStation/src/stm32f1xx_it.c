@@ -34,6 +34,7 @@
 #include "stm32f1xx_hal.h"
 #include "stm32f1xx.h"
 #include "stm32f1xx_it.h"
+#include "stm32f1xx_eac_uart.h"
 
 /* USER CODE BEGIN 0 */
 
@@ -207,9 +208,9 @@ void USART1_IRQHandler(void)
   /* USER CODE BEGIN USART1_IRQn 0 */
 
   /* USER CODE END USART1_IRQn 0 */
-  HAL_UART_IRQHandler(&huart1);
+  //HAL_UART_IRQHandler(&huart1);
   /* USER CODE BEGIN USART1_IRQn 1 */
-
+	EAC_UART_IRQHandler(&huart1);
   /* USER CODE END USART1_IRQn 1 */
 }
 
