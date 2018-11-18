@@ -36,7 +36,6 @@
 #include "spi.h"
 #include "usart.h"
 #include "gpio.h"
-#include "nrf24l01.h"
 
 /* USER CODE BEGIN Includes */
 
@@ -59,85 +58,8 @@ void Error_Handler(void);
 /* USER CODE END PFP */
 
 /* USER CODE BEGIN 0 */
-static void error()
-{
-    while (1)
-    {
-        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-        HAL_Delay(100);
-    }
-}
-
-static const uint8_t rx_address[5] = {1, 2, 3, 4, 5};
-static const uint8_t tx_address[5] = {1, 2, 3, 4, 6};
-nrf24l01 nrf;
-
-void nrf24l01_example()
-{
-  uint32_t rx_data;
-
-  {
-	  nrf24l01_config config;
-	  config.data_rate        = NRF_DATA_RATE_1MBPS;
-	  config.tx_power         = NRF_TX_PWR_0dBm;
-	  config.crc_width        = NRF_CRC_WIDTH_1B;
-	  config.addr_width       = NRF_ADDR_WIDTH_5;
-	  config.payload_length   = 32;    // maximum is 32 bytes
-	  config.retransmit_count = 15;   // maximum is 15 times
-	  config.retransmit_delay = 0x0F; // 4000us, LSB:250us
-	  config.rf_channel       = 0;
-	  config.rx_address       = rx_address;
-	  config.tx_address       = tx_address;
-	  config.rx_buffer        = (uint8_t*)&rx_data;
-
-	  config.spi         = &hspi1;
-	  config.spi_timeout = 10; // milliseconds
-	  config.ce_port     = NRF_CE_GPIO_Port;
-	  config.ce_pin      = NRF_CE_Pin;
-	  config.irq_port    = NRF_IRQ_GPIO_Port;
-	  config.irq_pin     = NRF_IRQ_Pin;
-	  config.csn_port	 = NRF_CSN_GPIO_Port;
-	  config.csn_pin	 = NRF_CSN_Pin;
-
-
-
-
-	  nrf_init(&nrf, &config);
-  }
-
-
-
-
-  uint8_t tx_data[32] = "Emanuele ti voglio bene!! <3 <3";
-  //uint8_t tx_data = 'a';
-
-  while(1)
-  {
-	  nrf_send_packet(&nrf, &tx_data);
-	  HAL_GPIO_TogglePin(LED_GPIO_Port,LED_Pin);
-	  HAL_Delay(2000);
-  }
-
-
-
-//  while (1)
-//  {
-//	  nrf_receive_packet(&nrf);
-//	  if (tx_data != rx_data)
-//		  error();
-//	  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-//	  HAL_Delay(500);
-//	  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-//  }
-}
 
 /* USER CODE END 0 */
-
-void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
-{
-	nrf_irq_handler(&nrf);
-}
-
 
 int main(void)
 {
@@ -158,9 +80,10 @@ int main(void)
   MX_GPIO_Init();
   MX_USART1_UART_Init();
   MX_SPI1_Init();
+  MX_USART2_UART_Init();
 
   /* USER CODE BEGIN 2 */
-  nrf24l01_example();
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -168,10 +91,6 @@ int main(void)
   while (1)
   {
   /* USER CODE END WHILE */
-	  HAL_GPIO_TogglePin(LED_GPIO_Port,LED_Pin);
-	  HAL_Delay(500);
-
-
 
   /* USER CODE BEGIN 3 */
 
