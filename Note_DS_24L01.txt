@@ -1,0 +1,160 @@
+Datasheet NRF24L01
+	- Enhanced ShockBurst (ESB) - motore di protocollo in banda base integrato nel chip
+		- comunicazione a pacchetti
+		- operazioni manuali o avanzate autonome
+		- gestisce tutte le operazioni a livello link
+		- lunghezza payload dinamica da 1 a 32 byte
+		- 6 data pipe (MultiCeiver) per connessioni a stella 1:6
+	- Opera in banda ISM (Industrial Scientific Medical) da 2.4GHz a 2,525 GHZ (126 canali).
+	- Mappa registri via SPI sempre accessibile
+	- FIFO interne assicurano buon flusso dati tra radio e MCU
+	- Front-end radio:
+		- Modulazione GFSK (Gaussian Frequency Shift Keying) - è una modulazione FSK nella quale gli impulsi corrispondenti al dato digitale vengono "smussati" con un filtro graussiano prima di essere inviati al modulatore vero e proprio; in questo modo l'occupazione di banda viene ridotta (minori bande laterali attorno alla portante) ma aumenta l'interferenza inter-simbolica.
+		- Configurabili: frequenza - 126 canali, potenza in uscita (0 -6 -12 -18 dBm) e data-rate in aria (250kBit/s, 1MBit/s, 2MBit/s)
+	- Due modalità di risparmio di potenza; adatto per ultra-low power designs
+	- Il "+" è compatibile con....ù
+	- Gestione dell'alimentazione:
+		- varie modalità: power-down, standby-I
+		- 1.5ms power-down to power up
+	- Interfaccia HOST
+		- SPI 4 pin, max 10Mbit/s, 3FIFO TX/RX da 32byte (tot 6 FIFO)
+		- Pin 5V tolerant (ma alimentazione da 1.9V a 3.6V)
+	- PIN:
+		- SPI usa MISO MOSI SCK CSN
+		- CE attiva RX o TX
+		- IRQ uscita interrupt attivo basso
+---> da capire "power on reset" (5.7)
+
+RADIO CONTROL
+	- macchina a stati interna; prende input dai valori di registro definiti dall'utente e dai segnali interni
+	- modi operativi:
+		- power down ---> modulino disabilitato; valori dei registri mantenuti, SPI tenuta attiva e registri accessibili; ci si va con PWR_UP = 0 nel registro CONFIG;
+		- standby; 
+			- standby-I ---> ci si va con PWR_UP = 1 (e mantenendo il pin CE = 0); lo scopo è avere dei tempi di startup brevi pur non consumando troppo; qui solo una parte dell'oscillatore a cristallo è attivo;
+			- standby-II ---> consuma un po' più di corrente; ci si va quando un PTX (Primary TX) ha buffer di TX vuoto e CE = 1; se la TX FIFO viene riempita, si torna in TX (130us per far ripartire PLL);
+		- RX ---> ci si va da standby-I mettendo CE = 1 e PRIM_RX = 1 (ovviamente PWR_UP = 1); modulino come ricevitore: demodula i segnali dal canale RF presentando constantemente i dati in arrivo al "protocol engine". Esso ricerca costanemente per un pacchetto valido:
+			- CRC valido
+			- indirizzo corretto
+			pacchetto valido ------> il payload è messo in una RX FIFO (se piene pacchetto è perduto).
+nostra ipotesi: il "protocol engine" può commutare su modalità TX tramite le modalità automatiche del ESB ad esempio per ritrasmettere pacchetto a seguito di ricezione NACK
+			- in RX si ha segnale RPD (Received Power Detector), che se alto, indica che c'è del segnale RF nel canale selezionato.
+		
+		- TX ---> ci si va da standby-I mettendo PRIM_RX = 0 (ovviamente PWR_UP = 1), un payload nella TX FIFO e un impulso su CE di almeno 10us; si usa per trasmettere e vi resta finché il pacchetto corrente non è stato trasmesso; dopodiché se CE = 0, passa in standby-I.
+		Il modulino non deve restare in TX per più di 4ms (probabilmente per ragioni legate al PLL che opera in open loop); l'ESB rispetta questo vincolo.
+		
+		La tabella 15 (pag. 23) mostra un riassunto di come configurare queste modalità.
+		
+		Il modulino non ha memoria non volatile e se viene rimossa la VDD il contenuto dei registri va perduto.
+	All'accensione, quando la VDD supera 1.9V, il modulino si mette in stato "power on reset" che dura al massimo 100ms, per poi andare automaticamente in "power down".
+	Per andare in Standby devo porre PWR_UP = 1 nel registro di configurazione, dopodiché attendere 1.5ms.
+	A questo punto, per fare ricezione o trasmissione devo mettere CE = 1 e scelgo TX/RX con PRIM_RX ( =0 --> TX).
+	
+	- air data rate
+		si imposta con RF_DR nel registro RF_SETUP; il ricevitore e il trasmettitore devono avere stessa ADR per poter comunicare insieme.
+	- canale in frequenza
+		ogni canale occupa meno di 1MHz (250kbps, 1Mbps) o meno di 2MHz (2Mbps);
+		risoluzione di scelta del canale: 1MHz;
+		
+		F0 = 2400 + RF_CH [MHz]
+		
+	- power amplifier control
+		usato per impostare potenza in tx (4 scelte possibili)
+		
+ENHANCED SHOCK-BURST
+E' un datalink layer basato su pacchetti; assembla e temporizza i pacchetti e gestisce ACK e ritrasmissione.
+	- 1 - 32 byte payload
+	- auto ACK con payload e auto-retransmit
+	- 6 data pipe per reti a stella 1:6
+	
+ESB fornisce comunicazione bidirezionale affidabile in modo semplice.
+Una transazione di pacchetto con ESB prevede la presenza di un PRX e di un PTX; inizia con trasmissione da PTX e finisce quando il PTX riceve un ACK dal PRX (il quale può restiuire assieme all'ACK anche dati ---> comunicazione bidirezionale).
+ESB quindi gestisce PTX e PRX facendoli automaticamente commutare da modo TX a modo RX e viceversa. Tutto però parte con una TX dal PTX.
+Si possono configurare max numero ritrasmissioni e ritardo tra una e l'altra.
+		
+	- Struttura pacchetto:
+		- preambolo 01010101 = 85d (se primo bit indirizzo è 0) oppure 10101010 = 170d (se primo bit indirizzo è 1); serve per stabilizzare ricevitore;
+		- indirizzo per il ricevitore; si può configurare la sua lunghezza tra 3, 4, 5 byte con il registro AW; non usare sequenze con una sola transizione tipo 000FFFFFh oppure con tutte transizioni (tipo preambolo)
+		- campo "packet control" (9 bit); contiene lunghezza del payload (usato solo se è abilitata la "dynamic payload length - Se è 0 vuol dire vuoto e si usa per mandare solo ACK), identificativo pacchetto (PID - utile per far capire al PRX se il pacchetto è una ritrasmissione (stesso PID) oppure un pacchetto nuovo) e un bit di flag NO_ACK (usato solo se autoACK è attivo).
+		-----> nota su NO_ACK; se NO_ACK = 1, vuol dire che questo pacchetto non deve essere acknowledged (il ricevitore non deve dire "io l'ho ricevuto"); il PTX lo può settare con il comando W_TX_PAYLOAD_NOACK (e prima si deve abilitare EN_DYN_ACK nel registro FEATURE); se NO_ACK è attivo, una volta finita la trasmissione del pacchetto corrente il PTX torna in standby-I (perché non deve attendere la risposta del PRX).
+		- CRC da 1 o 2 byte.
+	
+	- Gestione automatica del pacchetto:
+	l'ESB usa l'SB per la gestione automatica del pacchetto che ha le seguenti caratteristiche:
+		- lunghezza del payload statica (di default) o dinamica
+			- statica: il TX riempie adeguatamente la FIFO, mentre l'RX ha un registro (RX_PW_Px) per indicare la lunghezza; le due devono essere coerenti.
+			- dinamica (DPL - Dynamic Payload Length): l'RX può decodificare automaticamente perché l'info sulla lunghezza è contenuta nel pacchetto; la MCU può chiedere al modulino RX la lunghezza del pacchetto con il comando R_RX_PL_WID; per abilitarla EN_DPL = 1 nel registro FEATURE sia del tx che del rx; inoltre impostazione registro DYNPD (Vedi pag. 29).
+		- assemblamento automatico del pacchetto: (preambolo, indirizzo, campo di controllo pacchetto, payload, CRC)
+			- preambolo (dipende dal primo byte dell'address)
+			- indirizzo fetchato dal registro TX_ADDR; può avere lunghezza 3, 4, 5 byte (sulla base del registro AW);
+			- campo di controllo pacchetto: la lunghezza è inserita se DPL attiva sulla base dei byte nella FIFO TX; il TX aumenta il PID ogni volta che genera un nuovo pacchetto (e lo riusa in caso di ritrasmissione);
+			- payload è fetchato dalla FIFO TX;
+			- CRC calcolato automaticamente (pag. 28 polinomi); n° di byte settato da CRCO nel registro CONFIG.
+		- validazione automatica del pacchetto:
+			nella modalità di ricezione in modulino cerca nei pacchetti in arrivo l'indirizzo valido, corrispondente al proprio (che si trova nel registro RX_ADDR); se OK, l'ESB inizia a catturare il pacchetto sulla base della lunghezza (statica o dinamica) dopodiché calcola il CRC; se il CRC è corretto, l'ESB controlla il PID, comparandolo con quello ricevuto precedentemente; se PID_nuovo == PID_vecchio allora controlla i due CRC che, se uguali implicano stesso pacchetto ricevuto due volte (l'ultimo viene scartato); se il pacchetto invece è valutato come valido (vedi fig.6 pag.30 per flowchart).
+		- disassemblamento automatico del pacchetto:
+			una volta validato, il pacchetto è caricato nella RX FIFO e si asserisce la richiesta di interrupt (IRQ) RX_DR.
+			------> nota su RX_DR IRQ: l'asserzione di questa richiesta di interrupt non comporta per forza il pilotaggio del segnale IRQ; infatti, ciò dipende dal settaggio del bit MASK_RX_DR nel registro CONFIG (se 1 l'interrupt è mascherato e quindi non ha un effetto elettrico; viceversa se 0 si riflette come un interrupt attivo basso sul pin IRQ).
+	
+	- Gestione automatica della trasazione del pacchetto
+	L'ESB ha due funzioni:
+		- Auto Acknowledgement: il PRX invia un pacchetto di ACK al PTX dopo aver validato un pacchetto; è abilitato settando il registro EN_AA; se il pacchetto ricevuto ha NO_ACK = 1 allora l'AA non è eseguito; 
+			- Auto Acknowledgement con payload: è disponibile abilitando il bit EN_ACK_PAY nel registro FEATURE del ricevitore; un pacchetto di ACK può contenere un payload opzionale (funzione disponibile solo se DPL abilitata) aggiungibile mettendo i dati nella TX FIFO del PRX e poi inviadogli il comando W_ACK_PAYLOAD; in questo modo non appena sarà ricevuto un pacchetto dal PTX, questo payload sarà inviato insieme all'ACK (se l'indirizzo del PTX è concorde con quello desiderato come destinazione per il payload); max 3 payload "pendenti". ("già che ti sento...") 
+		- auto ritrasmissione: ritrasmette un pacchetto se ACK non ricevuto; si usa in un sistema con Auto Acknowledgement nel PTX; il n° di ritrasmissioni massime si imposta nei bit ARC del registro SETUP_RETR; il PTX entra in modalità RX in attesa di ricevere ACK per un tempo legato ai bit ARD del registro SETUP_RETR (che impostano l'Auto Retransmission Delay); poi torna in modalità TX per ritrasmettere. Il tempo di ARD non può essere più breve della somma del tempo di startup e del tempo on-air (vedi pag. 32).
+		Quando l'ACK viene correttamente ricevuto, il PTX asserisce la richiesta di interrupt TX_DS (TX Data Sent "ho spedito e l'altro ha ricevuto correttamente"); tale IRQ viene asserita anche quando l'Auto-Retransmission non è attivo e viene trasmesso un pacchetto.
+		E' possibile usare l'informazione contenuta nel registro OBSERVE_TX per avere informazioni sulla qualità del canale; esso contiene infatti il numero di ritrasmissioni per l'ultima transazione o per l'intera durata del canale corrente (vedi pag. 32)
+		In alternativa all'auto-retransmit si può impostare manualmente il modulino per ritrasmettere un certo numero di volte un pacchetto con il comando REUSE_TX_PL e con vari impulsi sul CE.
+		
+		-----> nota su TX_DS e RX_DR IRQ: sono entrambi asseriti se viene ricevuto un payload con l'ACK.
+		-----> se raggiunto massimo numero di ritrasmissioni, viene asserito MAX_RT IRQ
+		
+		ABBIAMO TROVATO ERRORE A PAG.33 del DS FIGURA 8,manca STANDBY-II SE TUTTO OK!
+		
+	- MultiCeiver:
+	usato nella modalità RX; contiene 6 data pipes (0 - 5) parallele con indirizzi unici; una data pipe è un canale logico nel canale fisico RF.
+	Quindi un ricevitore può ricevere da 6 diversi PTX sullo stesso canale RF, ciascuno assegnato ad una data pipe diversa (e quindi ad un indirizzo diverso). Ogni volta che un pacchetto viene ricevuto il suo indirizzo è confrontato con quello delle 6 data pipe e inoltrato a quella giusta. Occhio però: solo un pacchetto alla volta può essere ricevuto (perché fisicamente il canale radio è uno solo!).
+		- Caratteristiche comuni a tutte le data pipe: CRC, larghezza indirizzo di ricezione, canale RF, air data rate, guadagno del LNA.
+	Le data pipe sono abilitate con i bit del registro EN_RXADDR; di default lo sono solo la 0 e la 1. Ciascun indirizzo è configurato nei registri RX_ADDR_Px (x = 0 ... 5); assicurarsi che nessuna data pipe abbia lo stesso indirizzo di un'altra.
+	-----> nota su indirizzi pipe: la pipe 0 ha un indirizzo totalmente arbitrario; le pipe da 1 a 5 condividono i primi 4 byte (MSB) e differiscono tra loro solo per l'LSB.
+	Questo significa che un solo PRX fisico riceve su 6 indirizzi differenti, ovvero ha 6 propri indirizzi.
+	
+	*** NOSTRE NOTE SULLE PIPE: caso stella 1:6 ***
+	Consideriamo una configurazione a stella dove al centro c'è un PRX e alle punte ci sono 6 PTX (PTX0 ... PTX5). Per avere una comunicazione funzionante, ogni PTX deve trasmettere sull'indirizzo di una pipe (es. n-esima) del PRX (ovvero il suo TX_ADDR = RX_ADDR_Pn) ma lo stesso PTX deve poter ricevere gli ACK a lui destinati e quindi deve avere il proprio RX_ADDR_P0 = TX_ADDR. Notare che quando un TX invia un pacchetto si aspetta l'ACK di quel pacchetto sempre sulla pipe 0.
+	In questa configurazione, quindi, ogni PTX ha RX_ADDR_P0 = TX_ADDR e TX_ADDR uguale all'indirizzo della pipe del PRX sulla quale vuole scrivere.
+	Se si volesse realizzare una comunicazione bidirezionale (non basata su payload attaccato all'ACK) con una delle "punte" della stella, sarebbe furbo farlo con la pipe 0 del PRX che, quando diventa PTX, contiene già nel RX_ADDR_P0 l'indirizzo corretto del proprio ascoltatore (il nuovo PRX, ex PTX0). Notare che mentre il nodo centrale diventa un trasmettitore, esso non riceve più i dati dei PTX "punte" della stella.
+	*** Per evitare sovrapposizioni continue tra le trasmissioni dei 6 PTX è saggio adottare dei ritardi di ritrasmissione diversi per ogni PTX. In questo modo se per esempio PTX0 e PTX1 trasmettessero un pacchetto nello stesso istante, la successiva ritrasmissione non si sovrapporrebbe (per es. PTX0 ritrasmetterebbe prima di PTX1). 
+	
+ESB timing: pagg. 40-41 grafici temporali della sequenza dell'ESB, controllata dall'interfaccia di dati e controllo.
+Formule per calcolare time-on-air, time upload (ovvero il tempo di caricamento del pacchetto via SPI sul modulino dalla MCU) e quindi il tempo totale del ciclo ESB.
+Quando si ha trasmissione con NO_ACK = 0, l'ESB fa commutare automaticamente il PTX in RX per attendere ACK e cancella il pacchetto dalla TX FIFO solo una volta che ha ricevuto l'ACK.
+
+*** NOTA - TX/RX con ACK e pacchetto perso: il PTX dopo aver trasmesso attende l'ACK, passando in modalità RX; durante l'attesa del ritardo di ritrasmissione ARD il PTX non resta sempre in ascolto (RX viene spento per risparmiare energia se non trova indirizzo valido entro 250us).
+
+*** NOTA - TX/RX con ACK+payload: il PTX trasmette; il PRX riceve, asserisce RX_DR IRQ e trasmette ACK con payload; il PTX riceve ACK+payload e asserisce TX_DS (trasmissione riuscita) e RX_DR (ricevuto payload) IRQ. Il PRX asserirà TX_DS IRQ solo quando riceverà un nuovo pacchetto dal PTX.
+
+(saltate pagg.44, 45, 46)
+*** Nota: se TX non va a buon fine (max ritrasmissioni finite) allora il pacchetto resta nella TX FIFO. Si può ripartire con la ritrasmissione dello stesso con un colpetto di CE; altrimenti si può svuotare FIFO con il comando FLUSH_TX.
+
+DATA AND CONTROL INTERFACE
+Interfaccia dati e controlli (6 segnali 5V tolerant)
+	- IRQ (attivo basso)
+	- CE (attivo alto)
+	- Segnali SPI: CSN (chip select negato), SCK, MOSI, MISO (SPI da 0 a 10 Mbps)
+Comandi SPI da 1byte consentono di attivare le data FIFO e i registri.
+Caratteristiche:
+	- Comandi SPI a 8bit. Ogni nuovo comando dev'essere iniziato da una transizione sul CSN da alto a basso.
+	- Il contenuto dello status register è sempre letto e messo sulla MISO dopo una transizione alto->basso del CSN. Il suo contenuto è inaffidabile durante la transizione alto->basso del pin IRQ, perché esso viene aggiornato in quel momento.
+	- I comandi sono scritti con la seguente struttura:
+		1) command word (1 byte) MSBit first
+		2) data words (x byte) LSByte to MSByte, MSBit first
+		
+	
+	
+Alcuni comandi:
+	- W_REGISTER può essere eseguito solo in power down o standby.
+	
+- Data FIFO: sono due (una per TX e una per RX) ciascuna da tre livelli. Vi si accede mediante opportuni comandi.
+
+A pag. 59, procedura per gestire interrupt RX_DR.
+
+- Interrupt: di default sono tutti abilitati. Quando una IRQ avviene, essa va resettata.
+

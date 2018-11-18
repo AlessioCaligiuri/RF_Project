@@ -47,6 +47,8 @@
 #define NRF_IRQ_GPIO_Port GPIOA
 #define NRF_CE_Pin GPIO_PIN_3
 #define NRF_CE_GPIO_Port GPIOA
+#define NRF_CSN_Pin GPIO_PIN_4
+#define NRF_CSN_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 

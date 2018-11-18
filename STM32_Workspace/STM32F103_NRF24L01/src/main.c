@@ -70,11 +70,10 @@ static void error()
 
 static const uint8_t rx_address[5] = {1, 2, 3, 4, 5};
 static const uint8_t tx_address[5] = {1, 2, 3, 4, 6};
-
+nrf24l01 nrf;
 
 void nrf24l01_example()
 {
-  nrf24l01 nrf;
   uint32_t rx_data;
 
   {
@@ -97,15 +96,24 @@ void nrf24l01_example()
 	  config.ce_pin      = NRF_CE_Pin;
 	  config.irq_port    = NRF_IRQ_GPIO_Port;
 	  config.irq_pin     = NRF_IRQ_Pin;
+	  config.csn_port	 = NRF_CSN_GPIO_Port;
+	  config.csn_pin	 = NRF_CSN_Pin;
+
+
+
 
 	  nrf_init(&nrf, &config);
   }
 
+
+
+
+  //uint8_t tx_data[32] = "Emanuele ti voglio bene!! <3 <3";
   uint8_t tx_data = 'a';
 
   while(1)
   {
-	  nrf_send_packet(&nrf, &tx_data);
+	  nrf_send_packet_noack(&nrf, &tx_data);
 	  HAL_GPIO_TogglePin(LED_GPIO_Port,LED_Pin);
 	  HAL_Delay(2000);
   }
@@ -124,6 +132,12 @@ void nrf24l01_example()
 }
 
 /* USER CODE END 0 */
+
+void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
+{
+	nrf_irq_handler(&nrf);
+}
+
 
 int main(void)
 {

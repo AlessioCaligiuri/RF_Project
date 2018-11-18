@@ -17,19 +17,41 @@ static void csn_reset(nrf24l01* dev) {
                       GPIO_PIN_RESET);
 }
 
+/**
+ * @brief	Initializes the NRF24 device.
+ * @param dev NRF24 device to initialize
+ * @param config Configuration struct that contains parameters set once
+ * @return 	Communication result.
+ */
 NRF_RESULT nrf_init(nrf24l01* dev, nrf24l01_config* config) {
     dev->config = *config;
 
-    ce_reset(dev);
-    csn_reset(dev);
+    //testNRF(dev);
 
-    volatile NRF_RESULT result = nrf_power_up(dev, true);
+    ce_reset(dev); //NRF24 chip in standby mode
+    csn_set(dev);  //disable CSN
+    //dummy writing (CSN disabled) to get the correct clock polarity
+    uint8_t dummyTX = 0xFF;
+    uint8_t dummyRX = 0x00;
+
+    if (HAL_SPI_TransmitReceive(dev->config.spi, &dummyTX, &dummyRX, 1,
+	                                dev->config.spi_timeout) != HAL_OK) {
+	        return NRF_ERROR;
+	    }
+
+    /*** Power up sequence ***/
+    if(nrf_power_up(dev, true) != NRF_OK)
+    	return NRF_ERROR;
+
+    HAL_Delay(2); //2ms delay for 1.5ms power up
 
     uint8_t config_reg = 0;
-
-    while ((config_reg & 2) == 0) { // wait for powerup
-        nrf_read_register(dev, NRF_CONFIG, &config_reg);
-    }
+    if(nrf_read_register(dev, NRF_CONFIG, &config_reg) != NRF_OK)
+    	return NRF_ERROR;
+    //Check for configuration register power up bit correctness
+    if ((config_reg & 2) == 0)
+    	return NRF_ERROR;
+    /*** Power up sequence successfully done ***/
 
     nrf_set_rx_payload_width_p0(dev, dev->config.payload_length);
     nrf_set_rx_payload_width_p1(dev, dev->config.payload_length);
@@ -37,6 +59,7 @@ NRF_RESULT nrf_init(nrf24l01* dev, nrf24l01_config* config) {
     nrf_set_rx_address_p1(dev, dev->config.rx_address);
     nrf_set_rx_address_p0(dev, dev->config.tx_address);
     nrf_set_tx_address(dev, dev->config.tx_address);
+
     nrf_enable_rx_data_ready_irq(dev, 1);
     nrf_enable_tx_data_sent_irq(dev, 1);
     nrf_enable_max_retransmit_irq(dev, 1);
@@ -48,7 +71,8 @@ NRF_RESULT nrf_init(nrf24l01* dev, nrf24l01_config* config) {
     nrf_set_retransmittion_count(dev, dev->config.retransmit_count);
     nrf_set_retransmittion_delay(dev, dev->config.retransmit_delay);
 
-    nrf_set_rx_pipes(dev, 0x03);
+    nrf_set_rx_pipes(dev, 0x03); //enable pipes 0 and 1
+
     nrf_enable_auto_ack(dev, 0);
 
     nrf_clear_interrupts(dev);
@@ -56,22 +80,50 @@ NRF_RESULT nrf_init(nrf24l01* dev, nrf24l01_config* config) {
     nrf_rx_tx_control(dev, NRF_STATE_RX);
 
     nrf_flush_rx(dev);
+
+    nrf_flush_tx(dev);
+
+    //TODO: improve the portability
+    HAL_NVIC_EnableIRQ(EXTI2_IRQn);
+
     ce_set(dev);
 
     return NRF_OK;
 }
 
+/**
+ * @brief	Sends a command to the NRF24 using the format <command word>+<data bytes>
+ * @param dev	NRF24 device struct
+ * @param cmd	Command to send
+ * @param tx	Data to transmit (in the order LSByte first) (to check)
+ * @param rx	Received data
+ * @param len	Length of data to transmit (or receive), excluding the command word.
+ * @note	This function both receives and transmits the same amount of data which corresponds
+ * 			to the maximum length of the data to be sent o received. In fact, the undesired
+ * 			bytes will be discarded both from the NRF24 (see page 49 of Datasheet)
+ * 			and from this function.
+ * @warning		BEWARE! It uses Variable Length Arrays!
+ * @return	Result of the communication.
+ */
 NRF_RESULT nrf_send_command(nrf24l01* dev, NRF_COMMAND cmd, const uint8_t* tx,
                             uint8_t* rx, uint8_t len) {
     uint8_t myTX[len + 1];
     uint8_t myRX[len + 1];
+
     myTX[0] = cmd;
 
     int i = 0;
-    for (i = 0; i < len; i++) {
-        myTX[1 + i] = tx[i];
-        myRX[i]     = 0;
-    }
+//    for (i = 0; i < len; i++) {
+//        myTX[1 + i] = tx[i];
+//        myRX[i]     = 0;
+//    }
+
+    //our mod
+    myRX[0] = 0;
+	for (i = 0; i < len; i++) {
+		myTX[1 + i] = tx[i];
+		myRX[i + 1]     = 0;
+	}
 
     csn_reset(dev);
 
@@ -80,9 +132,13 @@ NRF_RESULT nrf_send_command(nrf24l01* dev, NRF_COMMAND cmd, const uint8_t* tx,
         return NRF_ERROR;
     }
 
-    for (i = 0; i < len; i++) { rx[i] = myRX[1 + i]; }
-
     csn_set(dev);
+
+    for (i = 0; i < len; i++)
+    {
+    	//discard the status register (that is always the first received byte)
+    	rx[i] = myRX[1 + i];
+    }
 
     return NRF_OK;
 }
@@ -139,8 +195,17 @@ __weak void nrf_packet_received_callback(nrf24l01* dev, uint8_t* data) {
     dev->rx_busy = 0;
 }
 
+/**
+ * @brief	Writes a register (8 bit data)
+ * @param dev NRF24 device struct
+ * @param reg Address of the register to read
+ * @param data 8bit data read from the register
+ * @return	Communication result.
+ * @note	The command word will contain the register address, then one other data
+ * 			byte (dummy) is sent and it will be discarded by the NRF24.
+ */
 NRF_RESULT nrf_read_register(nrf24l01* dev, uint8_t reg, uint8_t* data) {
-    uint8_t tx = 0;
+    uint8_t tx = 0; //dummy tx data
     if (nrf_send_command(dev, NRF_CMD_R_REGISTER | reg, &tx, data, 1) !=
         NRF_OK) {
         return NRF_ERROR;
@@ -148,14 +213,26 @@ NRF_RESULT nrf_read_register(nrf24l01* dev, uint8_t reg, uint8_t* data) {
     return NRF_OK;
 }
 
+/**
+ * @brief	Writes a register (8 bit data)
+ * @param dev NRF24 device struct
+ * @param reg Address of the register to write
+ * @param data 8bit data to write to the register
+ * @return	Communication result.
+ * @note	The command word will contain the register address, then one other data
+ * 			byte is sent to be put in that register.
+ */
 NRF_RESULT nrf_write_register(nrf24l01* dev, uint8_t reg, uint8_t* data) {
-    uint8_t rx = 0;
+    uint8_t rx = 0; //dummy rx buff
+
+    //each register is 8bit wide, so only one data byte needs to be sent (length = 1)
     if (nrf_send_command(dev, NRF_CMD_W_REGISTER | reg, data, &rx, 1) !=
         NRF_OK) {
         return NRF_ERROR;
     }
     return NRF_OK;
 }
+
 
 NRF_RESULT nrf_read_rx_payload(nrf24l01* dev, uint8_t* data) {
     uint8_t tx[dev->config.payload_length];
@@ -166,8 +243,9 @@ NRF_RESULT nrf_read_rx_payload(nrf24l01* dev, uint8_t* data) {
     return NRF_OK;
 }
 
-NRF_RESULT nrf_write_tx_payload(nrf24l01* dev, const uint8_t* data) {
-    uint8_t rx[dev->config.payload_length];
+NRF_RESULT nrf_write_tx_payload(nrf24l01* dev, const uint8_t* data)
+{
+    uint8_t rx[dev->config.payload_length]; //place for previous payload ACK; not used
     if (nrf_send_command(dev, NRF_CMD_W_TX_PAYLOAD, data, rx,
                          dev->config.payload_length) != NRF_OK) {
         return NRF_ERROR;
@@ -342,15 +420,21 @@ NRF_RESULT nrf_set_rx_pipes(nrf24l01* dev, uint8_t pipes) {
     return NRF_OK;
 }
 
-NRF_RESULT nrf_enable_auto_ack(nrf24l01* dev, uint8_t pipe) {
+//Enable auto ack on selected pipe
+NRF_RESULT nrf_enable_auto_ack(nrf24l01* dev, uint8_t pipe)
+{
     uint8_t reg = 0;
-    if (nrf_read_register(dev, NRF_EN_AA, &reg) != NRF_OK) { return NRF_ERROR; }
+    if (nrf_read_register(dev, NRF_EN_AA, &reg) != NRF_OK)
+    	return NRF_ERROR;
 
     reg |= 1 << pipe;
 
-    if (nrf_write_register(dev, NRF_EN_AA, &reg) != NRF_OK) {
+    if (nrf_write_register(dev, NRF_EN_AA, &reg) != NRF_OK)
+    {
         return NRF_ERROR;
     }
+
+    //TODO: check new register values
     return NRF_OK;
 }
 
@@ -391,18 +475,28 @@ NRF_RESULT nrf_set_crc_width(nrf24l01* dev, NRF_CRC_WIDTH width) {
     return NRF_OK;
 }
 
+/**
+ * @brief	Writes the power up flag in the NRF24.
+ * @param dev NRF24 device struct
+ * @param bool Power up flag value. 0 to power down; 1 to power up the device.
+ * @return	Communication result.
+ */
 NRF_RESULT nrf_power_up(nrf24l01* dev, bool power_up) {
     uint8_t reg = 0;
+
+    //get status register
     if (nrf_read_register(dev, NRF_CONFIG, &reg) != NRF_OK) {
         return NRF_ERROR;
     }
 
     if (power_up) {
-        reg |= 1 << 1;
-    } else {
+        reg |= (1 << 1);
+    }
+    else { //power-up
         reg &= ~(1 << 1);
     }
 
+    //write the new status register
     if (nrf_write_register(dev, NRF_CONFIG, &reg) != NRF_OK) {
         return NRF_ERROR;
     }
@@ -416,7 +510,7 @@ NRF_RESULT nrf_rx_tx_control(nrf24l01* dev, NRF_TXRX_STATE rx) {
     }
 
     if (rx) {
-        reg |= 1;
+        reg |= 1; //Set PRIM_RX flag
     } else {
         reg &= ~(1);
     }
@@ -527,11 +621,12 @@ NRF_RESULT nrf_set_rx_payload_width_p1(nrf24l01* dev, uint8_t width) {
     return NRF_OK;
 }
 
-NRF_RESULT nrf_send_packet(nrf24l01* dev, const uint8_t* data) {
+NRF_RESULT nrf_send_packet(nrf24l01* dev, const uint8_t* data)
+{
 
     dev->tx_busy = 1;
 
-    ce_reset(dev);
+    ce_reset(dev); //go back into STANDBY-I
     nrf_rx_tx_control(dev, NRF_STATE_TX);
     nrf_write_tx_payload(dev, data);
     ce_set(dev);
@@ -581,4 +676,44 @@ NRF_RESULT nrf_push_packet(nrf24l01* dev, const uint8_t* data) {
     ce_set(dev);
 
     return NRF_OK;
+}
+
+void testNRF(nrf24l01* dev)
+{
+	uint8_t myTX[2];
+	myTX[0] = 0xFF;
+	myTX[1] = 0;
+
+	uint8_t myRX[2];
+	myRX[0] = 0;
+	myRX[1] = 0;
+
+	HAL_SPI_TransmitReceive(dev->config.spi, myTX, myRX, 1, dev->config.spi_timeout);
+
+	//NOP ---> read status
+	csn_reset(dev);
+	HAL_SPI_TransmitReceive(dev->config.spi, myTX, myRX, 1, dev->config.spi_timeout);
+	csn_set(dev);
+
+	//Write register STATUS
+	myTX[0] = 0b00100111;
+	myTX[1] = 0b00011110;
+	csn_reset(dev);
+	HAL_SPI_TransmitReceive(dev->config.spi, myTX, myRX, 2, dev->config.spi_timeout);
+	csn_set(dev);
+
+	//NOP ---> read status
+	myTX[0] = 0xFF;
+	myTX[1] = 0;
+	csn_reset(dev);
+	HAL_SPI_TransmitReceive(dev->config.spi, myTX, myRX, 1, dev->config.spi_timeout);
+	csn_set(dev);
+
+	//NOP ---> read status
+	myTX[0] = 0xFF;
+	myTX[1] = 0;
+	csn_reset(dev);
+	HAL_SPI_TransmitReceive(dev->config.spi, myTX, myRX, 1, dev->config.spi_timeout);
+	csn_set(dev);
+
 }

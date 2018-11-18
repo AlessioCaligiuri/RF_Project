@@ -1,0 +1,51 @@
+SPI
+
+Seriale sincrona full-duplex (MISO e MOSI)
+Tipicamente 4 segnali (A volte solo 3)
+- SCK: clock per sincronizzare trasferimento dati su bus SPI; generato dal master
+- MOSI: Master Output Slave Input; dati dal master ad uno slave;
+- MISO: Master Input Slave Output; dati da uno slave al master;
+- SSn: Slave Select; in un tipico BUS SPI ce ne sono tanti quanti i device da selezionare; è attivo basso.
+In SPI non esistono indirizzi ma solo linee elettriche! Dispositivi con diverse velocità possono coesistere sullo stesso bus.
+Esiste configurazione half duplex che fonde MISO e MOSI in SISO.
+Rispetto a I2C permette di andare molto più veloce e non c'è un protocollo unico di comunicazione; la comunicazione parte quando viene generato dal master il clock. Per selezionare il dispositivo slave con cui dialogare si porta basso il relativo SSn. Se c'è un solo dispositivo si può collegare SSn di quel dispositivo direttamente a massa.
+
+*** Transazione tipo:
+- il master inizia a generare clock e porta SSn basso;
+- di solito i due attori sono un registro nello slave e un registro nel master; all'avanzare del clock vengono shiftati fuori i bit dei registri (MSBbit first) e contemporaneamente si caricano nello stesso registro i bit dall'altro lato (di solito gli LSB); ciò avviene sia nel master che nello slave e quindi si ha lo scambio dei contenuti dei registri;
+- la trasmissione può continuare per qualsiasi numero di cicli di clock;
+- quando si vuol completare, semplicemente il master non genera più clock e deasserisce SSn.
+
+*** Polarità e fase del clock: modi del bus SPI
+Serve coerenza su polarità (CPOL) e fase del clock (CPHA) tra master e slave. Le varie combinazioni sono numerate (modi 0 1 2 3).
+
+CPOL = 0 --> lo stato a riposo è 0;
+	CPHA = 0 --> dato catturato sul fronte di salita di SCK e fornito in output sul fronte di discesa (opposto per CPHA = 1);
+	
+CPOL = 1 --> lo stato a riposo è 1;
+	CPHA = 0 --> dato catturato sul fronte di discesa di SCK e fornito in output sul fronte di salita (opposto per CPHA = 1);
+
+Dunque CPHA=0 significa campionare sul primo fronte di clock (in tal caso il dato deve essere stabile già da prima), mentre CPHA=1 significa campionare sul secondo fronte di clock.
+
+*** Gestione del SSn
+Non ci sono indirizzi nel protocollo, solo segnali SSn. I micro STM32 forniscono 2 modi di gestire SSn:
+	- NSS software mode: SSn è pilotato dal firmware e qualsiasi GPIO libero può essere utilizzato come segnale SSn.
+	- NSS hardware mode: un pin di IO specifico è utilizzato per il segnale SSn ed è pilotato dalla periferica HW SPI. 2 modi:
+		- NSS output enabled: usata solo quando STM32 è master; il segnale NSS è pilotato basso quando il master inizia comunicazione ed è tenuto basso fino a che SPI non è disabilitato --> consigliabile quando c'è un solo slave sul bus e il suo pin SSn è connesso al segnale NSS; non permette una modalità multi-master (non vista);
+		- NSS output disabled: permette la capacità multi-master; se STM32 fosse slave, funzionerebbe come un normale SSn.
+		
+*** Modalità SPI TI (Texas Instruments)
+E' una modalità compatibile con le specifiche della Texas Instruments che prevedono un uso particolare del segnale SSn.
+
+*** CubeHAL API per SPI
+- Modulo HAL_SPI: struct SPI_HandleTypeDef; contiene istanza SPI (puntatore agli indirizzi della periferica HW), istanza di struct di inizializzazione (con tutti i parametri), puntatori/contatori/dimensioni buffer rx e tx, handle DMA.
+
+- Inizializzazione: uso struct SPI_InitTypeDef;
+	- modo (master o slave), direzione (specifica se slave lavora in 4-wire, full o half duplex, o 3-wire), datasize (dimensione dati trasferiti su bus SPI, può essere 8bit o 16bit), clock polarity (CPOL), clock phase (CPHA), NSS (gestione HW o SW), baudrate prescaler (---> clock SPI, a partire da clock APB), firstbit (prima MSBit o LSBit), modalità TI, CRC
+	
+- Scambio dati
+Comunicazione in polling, interrupt o DMA.
+Ci sono transmit, receive e transmit/receive. HAL_SPI_.......
+
+
+
