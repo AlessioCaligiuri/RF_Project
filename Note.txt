@@ -86,4 +86,20 @@ Continuamo a leggere datasheet NRF24L01	da pag. 41/75. Finita lettura. Iniziamo 
 2018.11.17
 Riprendiamo a leggere SPI su Carmine Noviello.
 
+2018.11.18
+NRF24 con STM32 funziona!
+
+TA = Terminal Adapter: motori del GSM; il nostro tx/rx SIM800L
+TE = Terminal Equipment: chi controlla i motori GSM scambiando comandi AT
+
+	
+Risposte del SIM800L:
+	+CMTI: "ME",23 --> +CMTI: <mem3>,<index> --> "ME" vuol dire che i messaggi ricevuti vanno nel "phone message storage", mentre l'indexè l'indice dell'SMS nella memoria (Verificare quest'ultima cosa)
+	
+Leggendo su https://www.treccarichi.net/2016/06/sim800l/ abbiamo trovato comando per sapere subito il testo del messaggio ricevuto e il numero di telefono. Il comando per impostare questa modalità è:
+	AT+CNMI=1,2,0,0,0
+	
+Dopo questo comando il messaggio tipo è:
+	+CMT: "+393803415931","","18/11/18,17:29:54+04"
+	Come butta dopo il CNMI?
 	
