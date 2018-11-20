@@ -102,4 +102,21 @@ Leggendo su https://www.treccarichi.net/2016/06/sim800l/ abbiamo trovato comando
 Dopo questo comando il messaggio tipo è:
 	+CMT: "+393803415931","","18/11/18,17:29:54+04"
 	Come butta dopo il CNMI?
+inoltre il messaggio non viene salvato.
 	
+2018.11.20
+Abbiamo provato il parser con il PC e PuTTY e funziona!
+Ora anche con SIM800L dopo comandi:
+AT+CMGF=1
+AT+CNMI=1,2,0,0,0
+
+Abbiamo provato questa configurazione:
+
+SIM800 <---------> STM32
+			|
+			|
+			|----> PC
+
+
+
+
