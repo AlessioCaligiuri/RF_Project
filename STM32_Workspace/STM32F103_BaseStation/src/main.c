@@ -43,6 +43,9 @@
 
 /* USER CODE BEGIN Includes */
 #define	USART1_BUFFER_LENGTH	512
+const char SIM800_AT[]=				"AT\r\n";
+#define SIM800_CMGF1			"AT+CMGF=1\r\n"
+#define SIM800_CNMI				"AT+CNMI=1,2,0,0,0\r\n"
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
@@ -116,6 +119,33 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart)
 	return;
 }
 
+/* Configures SIM800 to receive and show sms */
+void SIM800_InitSMSReception(UART_HandleTypeDef* huart)
+{
+	/* Send AT command for the autobaudrate */
+	EAC_UART_Transmit_IT(huart,SIM800_AT,strlen(SIM800_AT));
+	while(!is_txToPC_Completed);
+	is_txToPC_Completed = false;
+
+	HAL_Delay(500);
+
+	/* Set text mode */
+	EAC_UART_Transmit_IT(huart,SIM800_CMGF1,strlen(SIM800_CMGF1));
+	while(!is_txToPC_Completed);
+	is_txToPC_Completed = false;
+
+	HAL_Delay(500);
+
+	// TODO: Check SIM800 response
+
+	/* Set sms preview and disable the sms storing */
+	EAC_UART_Transmit_IT(huart,SIM800_CNMI,strlen(SIM800_CNMI));
+	while(!is_txToPC_Completed);
+	is_txToPC_Completed = false;
+
+	HAL_Delay(500);
+}
+
 /* USER CODE END 0 */
 
 int main(void)
@@ -143,7 +173,7 @@ int main(void)
   nrf24l01_setup();
   SIM_Parser_init(&simParser);
   EAC_UART_Start_Rx(&huart1,9);
-
+  SIM800_InitSMSReception(&huart1);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -163,36 +193,36 @@ int main(void)
 	  if(simParser.isCompleted)
 	  {
 		  simParser.isCompleted = false;
-		  EAC_UART_Transmit_IT(&huart1,simParser.cmd,strlen(simParser.cmd));
-		  while(!is_txToPC_Completed);
-		  is_txToPC_Completed = false;
-		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
-		  while(!is_txToPC_Completed);
-		  is_txToPC_Completed = false;
-		  EAC_UART_Transmit_IT(&huart1,simParser.field1,strlen(simParser.field1));
-		  while(!is_txToPC_Completed);
-		  is_txToPC_Completed = false;
-		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
-		  while(!is_txToPC_Completed);
-		  is_txToPC_Completed = false;
-		  EAC_UART_Transmit_IT(&huart1,simParser.field2,strlen(simParser.field2));
-		  while(!is_txToPC_Completed);
-		  is_txToPC_Completed = false;
-		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
-		  while(!is_txToPC_Completed);
-		  is_txToPC_Completed = false;
-		  EAC_UART_Transmit_IT(&huart1,simParser.field3,strlen(simParser.field3));
-		  while(!is_txToPC_Completed);
-		  is_txToPC_Completed = false;
-		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
-		  while(!is_txToPC_Completed);
-		  is_txToPC_Completed = false;
-		  EAC_UART_Transmit_IT(&huart1,simParser.text,strlen(simParser.text));
-		  while(!is_txToPC_Completed);
-		  is_txToPC_Completed = false;
-		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
-		  while(!is_txToPC_Completed);
-		  is_txToPC_Completed = false;
+//		  EAC_UART_Transmit_IT(&huart1,simParser.cmd,strlen(simParser.cmd));
+//		  while(!is_txToPC_Completed);
+//		  is_txToPC_Completed = false;
+//		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+//		  while(!is_txToPC_Completed);
+//		  is_txToPC_Completed = false;
+//		  EAC_UART_Transmit_IT(&huart1,simParser.field1,strlen(simParser.field1));
+//		  while(!is_txToPC_Completed);
+//		  is_txToPC_Completed = false;
+//		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+//		  while(!is_txToPC_Completed);
+//		  is_txToPC_Completed = false;
+//		  EAC_UART_Transmit_IT(&huart1,simParser.field2,strlen(simParser.field2));
+//		  while(!is_txToPC_Completed);
+//		  is_txToPC_Completed = false;
+//		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+//		  while(!is_txToPC_Completed);
+//		  is_txToPC_Completed = false;
+//		  EAC_UART_Transmit_IT(&huart1,simParser.field3,strlen(simParser.field3));
+//		  while(!is_txToPC_Completed);
+//		  is_txToPC_Completed = false;
+//		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+//		  while(!is_txToPC_Completed);
+//		  is_txToPC_Completed = false;
+//		  EAC_UART_Transmit_IT(&huart1,simParser.text,strlen(simParser.text));
+//		  while(!is_txToPC_Completed);
+//		  is_txToPC_Completed = false;
+//		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+//		  while(!is_txToPC_Completed);
+//		  is_txToPC_Completed = false;
 	  }
 
 
