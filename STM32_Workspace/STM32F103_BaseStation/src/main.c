@@ -39,6 +39,7 @@
 #include "stm32f1xx_eac_uart.h"
 #include "nrf24l01.h"
 #include <stdbool.h>
+#include "sim_parser.h"
 
 /* USER CODE BEGIN Includes */
 #define	USART1_BUFFER_LENGTH	512
@@ -64,7 +65,7 @@ void Error_Handler(void);
 
 static SIM_Parser_t simParser;
 static uint8_t rxByte_fromPC = 0;
-static bool is_txToPC_Completed = 0;
+static volatile bool is_txToPC_Completed = 0;
 
 /* Data for NRF24L01 module */
 static const uint8_t rx_address[5] = {1, 2, 3, 4, 5};
@@ -107,9 +108,9 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 }
 
 /* Callback for UART transmission completed */
-void HAL_UART_txCpltCallback(UART_HandleTypeDef* huart)
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart)
 {
-	if(huart == huart1)
+	if(huart == &huart1)
 		is_txToPC_Completed = 1;
 
 	return;
@@ -161,26 +162,37 @@ int main(void)
 	  /* Semantic parser */
 	  if(simParser.isCompleted)
 	  {
+		  simParser.isCompleted = false;
 		  EAC_UART_Transmit_IT(&huart1,simParser.cmd,strlen(simParser.cmd));
 		  while(!is_txToPC_Completed);
+		  is_txToPC_Completed = false;
 		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
 		  while(!is_txToPC_Completed);
+		  is_txToPC_Completed = false;
 		  EAC_UART_Transmit_IT(&huart1,simParser.field1,strlen(simParser.field1));
 		  while(!is_txToPC_Completed);
+		  is_txToPC_Completed = false;
 		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
 		  while(!is_txToPC_Completed);
+		  is_txToPC_Completed = false;
 		  EAC_UART_Transmit_IT(&huart1,simParser.field2,strlen(simParser.field2));
 		  while(!is_txToPC_Completed);
+		  is_txToPC_Completed = false;
 		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
 		  while(!is_txToPC_Completed);
+		  is_txToPC_Completed = false;
 		  EAC_UART_Transmit_IT(&huart1,simParser.field3,strlen(simParser.field3));
 		  while(!is_txToPC_Completed);
+		  is_txToPC_Completed = false;
 		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
 		  while(!is_txToPC_Completed);
+		  is_txToPC_Completed = false;
 		  EAC_UART_Transmit_IT(&huart1,simParser.text,strlen(simParser.text));
 		  while(!is_txToPC_Completed);
+		  is_txToPC_Completed = false;
 		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
 		  while(!is_txToPC_Completed);
+		  is_txToPC_Completed = false;
 	  }
 
 
