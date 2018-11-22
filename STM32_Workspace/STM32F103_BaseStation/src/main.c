@@ -40,40 +40,37 @@
 #include "nrf24l01.h"
 #include <stdbool.h>
 #include "sim_parser.h"
+#include <string.h>
 
-/* USER CODE BEGIN Includes */
 #define	USART1_BUFFER_LENGTH	512
-const char SIM800_AT[]=				"AT\r\n";
+const char SIM800_AT[]=			"AT\r\n";
 #define SIM800_CMGF1			"AT+CMGF=1\r\n"
 #define SIM800_CNMI				"AT+CNMI=1,2,0,0,0\r\n"
-/* USER CODE END Includes */
+#define SIM800_CMD_RX_MSG		"CMT"
 
-/* Private variables ---------------------------------------------------------*/
+#define NUMBER_FIELD_LENGTH					16
+#define NUMBER_AUTHORIZED_PHONE_NUMBERS		2
 
-/* USER CODE BEGIN PV */
-/* Private variables ---------------------------------------------------------*/
+#define NRF24_PACKET_LENGTH		32
 
-/* USER CODE END PV */
-
-/* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 void Error_Handler(void);
 
-/* USER CODE BEGIN PFP */
-/* Private function prototypes -----------------------------------------------*/
-
-/* USER CODE END PFP */
-
-/* USER CODE BEGIN 0 */
-
 static SIM_Parser_t simParser;
 static uint8_t rxByte_fromPC = 0;
+static uint8_t rxByte_fromSIM800 = 0;
 static volatile bool is_txToPC_Completed = 0;
+static volatile bool is_txToSIM800_Completed = 0;
 
 /* Data for NRF24L01 module */
 static const uint8_t rx_address[5] = {1, 2, 3, 4, 5};
 static const uint8_t tx_address[5] = {1, 2, 3, 4, 6};
 nrf24l01 nrf;
+
+/* Authorized phone numbers array */
+const char listNumber[NUMBER_AUTHORIZED_PHONE_NUMBERS][NUMBER_FIELD_LENGTH] =
+				{"\"+393803415931\"",
+				 "\"+393487222907\""};
 
 /* Function for 2.4GHz module init */
 void nrf24l01_setup()
@@ -84,7 +81,7 @@ void nrf24l01_setup()
 	config.tx_power         = NRF_TX_PWR_0dBm;
 	config.crc_width        = NRF_CRC_WIDTH_1B;
 	config.addr_width       = NRF_ADDR_WIDTH_5;
-	config.payload_length   = 32;    // maximum is 32 bytes
+	config.payload_length   = NRF24_PACKET_LENGTH;    // maximum is 32 bytes
 	config.retransmit_count = 15;   // maximum is 15 times
 	config.retransmit_delay = 0x0F; // 4000us, LSB:250us
 	config.rf_channel       = 0;
@@ -114,7 +111,10 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
 void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart)
 {
 	if(huart == &huart1)
-		is_txToPC_Completed = 1;
+		//is_txToPC_Completed = 1;
+		is_txToSIM800_Completed = 1;
+//	if(huart == &huart2)
+//		is_txToSIM800_Completed = 1;
 
 	return;
 }
@@ -124,15 +124,15 @@ void SIM800_InitSMSReception(UART_HandleTypeDef* huart)
 {
 	/* Send AT command for the autobaudrate */
 	EAC_UART_Transmit_IT(huart,SIM800_AT,strlen(SIM800_AT));
-	while(!is_txToPC_Completed);
-	is_txToPC_Completed = false;
+	while(!is_txToSIM800_Completed);
+	is_txToSIM800_Completed = false;
 
 	HAL_Delay(500);
 
 	/* Set text mode */
 	EAC_UART_Transmit_IT(huart,SIM800_CMGF1,strlen(SIM800_CMGF1));
-	while(!is_txToPC_Completed);
-	is_txToPC_Completed = false;
+	while(!is_txToSIM800_Completed);
+	is_txToSIM800_Completed = false;
 
 	HAL_Delay(500);
 
@@ -140,23 +140,49 @@ void SIM800_InitSMSReception(UART_HandleTypeDef* huart)
 
 	/* Set sms preview and disable the sms storing */
 	EAC_UART_Transmit_IT(huart,SIM800_CNMI,strlen(SIM800_CNMI));
-	while(!is_txToPC_Completed);
-	is_txToPC_Completed = false;
+	while(!is_txToSIM800_Completed);
+	is_txToSIM800_Completed = false;
 
 	HAL_Delay(500);
 }
 
-/* USER CODE END 0 */
+/* Debug function to send to PC all the received fields */
+void sendFieldsToPC()
+{
+	  EAC_UART_Transmit_IT(&huart1,simParser.cmd,strlen(simParser.cmd));
+	  while(!is_txToPC_Completed);
+	  is_txToPC_Completed = false;
+	  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+	  while(!is_txToPC_Completed);
+	  is_txToPC_Completed = false;
+	  EAC_UART_Transmit_IT(&huart1,simParser.field1,strlen(simParser.field1));
+	  while(!is_txToPC_Completed);
+	  is_txToPC_Completed = false;
+	  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+	  while(!is_txToPC_Completed);
+	  is_txToPC_Completed = false;
+	  EAC_UART_Transmit_IT(&huart1,simParser.field2,strlen(simParser.field2));
+	  while(!is_txToPC_Completed);
+	  is_txToPC_Completed = false;
+	  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+	  while(!is_txToPC_Completed);
+	  is_txToPC_Completed = false;
+	  EAC_UART_Transmit_IT(&huart1,simParser.field3,strlen(simParser.field3));
+	  while(!is_txToPC_Completed);
+	  is_txToPC_Completed = false;
+	  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+	  while(!is_txToPC_Completed);
+	  is_txToPC_Completed = false;
+	  EAC_UART_Transmit_IT(&huart1,simParser.text,strlen(simParser.text));
+	  while(!is_txToPC_Completed);
+	  is_txToPC_Completed = false;
+	  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
+	  while(!is_txToPC_Completed);
+	  is_txToPC_Completed = false;
+}
 
 int main(void)
 {
-
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
-  /* MCU Configuration----------------------------------------------------------*/
-
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
   HAL_Init();
 
@@ -177,60 +203,48 @@ int main(void)
   /* USER CODE END 2 */
 
   /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
   while (1)
   {
-  /* USER CODE END WHILE */
-	  while(EAC_UART_DequeueRxByte(&huart1,&rxByte_fromPC))
+
+	  nrf_send_packet_noack(&nrf, "a");
+	  continue;
+
+	  while(EAC_UART_DequeueRxByte(&huart1,&rxByte_fromSIM800))
 	  {
 		  if(simParser.isCompleted)
 			  break;
 
-		  SIM_Parser_update(&simParser,rxByte_fromPC);
+		  SIM_Parser_update(&simParser,rxByte_fromSIM800);
 	  }
 
 	  /* Semantic parser */
 	  if(simParser.isCompleted)
 	  {
 		  simParser.isCompleted = false;
-//		  EAC_UART_Transmit_IT(&huart1,simParser.cmd,strlen(simParser.cmd));
-//		  while(!is_txToPC_Completed);
-//		  is_txToPC_Completed = false;
-//		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
-//		  while(!is_txToPC_Completed);
-//		  is_txToPC_Completed = false;
-//		  EAC_UART_Transmit_IT(&huart1,simParser.field1,strlen(simParser.field1));
-//		  while(!is_txToPC_Completed);
-//		  is_txToPC_Completed = false;
-//		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
-//		  while(!is_txToPC_Completed);
-//		  is_txToPC_Completed = false;
-//		  EAC_UART_Transmit_IT(&huart1,simParser.field2,strlen(simParser.field2));
-//		  while(!is_txToPC_Completed);
-//		  is_txToPC_Completed = false;
-//		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
-//		  while(!is_txToPC_Completed);
-//		  is_txToPC_Completed = false;
-//		  EAC_UART_Transmit_IT(&huart1,simParser.field3,strlen(simParser.field3));
-//		  while(!is_txToPC_Completed);
-//		  is_txToPC_Completed = false;
-//		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
-//		  while(!is_txToPC_Completed);
-//		  is_txToPC_Completed = false;
-//		  EAC_UART_Transmit_IT(&huart1,simParser.text,strlen(simParser.text));
-//		  while(!is_txToPC_Completed);
-//		  is_txToPC_Completed = false;
-//		  EAC_UART_Transmit_IT(&huart1,"\r\n",2);
-//		  while(!is_txToPC_Completed);
-//		  is_txToPC_Completed = false;
+		  //sendFieldsToPC();
+
+		  /* Check if the received AT response is a new message */
+		  if(!strcmp(simParser.cmd, SIM800_CMD_RX_MSG))
+		  {
+			  bool isAuthorizedNumber = false;
+			  /* Check if message is from an authorized number */
+			  for (int i=0; i<NUMBER_AUTHORIZED_PHONE_NUMBERS; i++)
+			  {
+				  if(!strcmp(simParser.field1, listNumber[i]))
+				  {
+					  isAuthorizedNumber = true;
+					  break;
+				  }
+			  }
+			  if(isAuthorizedNumber)
+			  {
+				  char textToSend[NRF24_PACKET_LENGTH] = {0};
+				  strncpy (textToSend, simParser.text, NRF24_PACKET_LENGTH);
+				  nrf_send_packet(&nrf, textToSend);
+			  }
+		  }
 	  }
-
-
-  /* USER CODE BEGIN 3 */
-
   }
-  /* USER CODE END 3 */
-
 }
 
 /** System Clock Configuration
@@ -278,9 +292,6 @@ void SystemClock_Config(void)
   HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
 }
 
-/* USER CODE BEGIN 4 */
-
-/* USER CODE END 4 */
 
 /**
   * @brief  This function is executed in case of error occurrence.

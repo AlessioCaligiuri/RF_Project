@@ -148,6 +148,7 @@ void SIM_Parser_update(SIM_Parser_t* parser, char rxChar)
 				{
 					(parser->text[parser->rxCharNumber]) = '\0';
 					parser->isCompleted = true;
+					parser->state = PARSER_WAIT_PLUS;
 					break;
 				}
 				

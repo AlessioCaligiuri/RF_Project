@@ -631,7 +631,7 @@ NRF_RESULT nrf_send_packet(nrf24l01* dev, const uint8_t* data)
     nrf_write_tx_payload(dev, data);
     ce_set(dev);
 
-    while (dev->tx_busy == 1) {} // wait for end of transmittion
+    while (dev->tx_busy == 1) {} // wait for end of transmission
 
     return dev->tx_result;
 }
@@ -644,7 +644,7 @@ NRF_RESULT nrf_send_packet_noack(nrf24l01* dev, const uint8_t* data) {
     nrf_write_tx_payload_noack(dev, data);
     ce_set(dev);
 
-    while (dev->tx_busy == 1) {} // wait for end of transmittion
+    while (dev->tx_busy == 1) {} // wait for end of transmission
 
     return dev->tx_result;
 }
