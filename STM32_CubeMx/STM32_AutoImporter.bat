@@ -4,5 +4,5 @@ C:
 
 cd C:\STM32Toolchain\CubeMXImporter
 
-cubemximporter.py D:\INGEGNERIA\RF\Progetto\STM32_Workspace\STM32F103_BaseStation D:\INGEGNERIA\RF\Progetto\STM32_CubeMx\STM32F103_BaseStation 
+cubemximporter.py D:\INGEGNERIA\RF\Progetto\STM32_Workspace\STM32F103_RemoteUnit D:\INGEGNERIA\RF\Progetto\STM32_CubeMx\STM32F103_RemoteUnit 
 PAUSE
