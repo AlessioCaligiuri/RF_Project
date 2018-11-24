@@ -1,0 +1,13 @@
+INTRODUZIONE
+
+Lo scopo del progetto è sviluppare un sistema a basso costo che consenta di gestire da remoto degli apparati elettrici di un'abitazione. Un tale sistema deve essere in grado di ricevere degli SMS e, approvato il mittente sulla base di una lista di numeri autorizzati, deve poter accendere o spegnere dei dispositivi, per esempio una lampada, uno scaldabagno elettrico, ecc...
+Esistono in commercio delle "prese intelligenti" che, collegandosi alla rete WiFi di casa, sono in grado di portare a termine il compito suddetto; il prezzo di questi dispositivi parte da circa 20€. Per le "prese intelligenti" dotate di una SIM card, la cifra minima richiesta sale a circa 50€.
+La nostra idea di progetto si evolve nell'avere una "stazione base" dotata di connettività GSM e varie "unità remote" che vi dialogano in banda ISM a 2.4GHz. In tal modo, si possono pilotare più dispositivi in casa al prezzo di una sola SIM.
+Nell'ottica di sviluppare un progetto a basso costo, si è scelto di acquistare il materiale necessario da rivenditori on-line orientali, che forniscono delle schede preassemblate ("breakout board") su cui è montato il componente principale e l'elettronica di contorno essenziale, necessaria per il suo funzionamento. I blocchi base del nostro progetto sono:
+	- microcontrollore ARM Cortex-M3 della famiglia STM32 (STMictroelectronics STM32F103C8T6);
+	- modulo per connessione GSM (SIMCom SIM800L);
+	- ricetrasmettitore in banda ISM 2.4Ghz (Nordic Semiconductor NRF24L01).
+	
+Per i due componenti RF sono disponibili sul web varie librerie stabili, specifiche per l'ambiente Arduino, molto diffuse e ben documentate; ciò non è vero nel mondo STM32, per il quale è stato necessario sviluppare del codice nuovo.
+Più in particolare, il SIM800L si interfaccia con una seriale UART e si configura mediante comandi AT; è stato quindi necessario scrivere un parser per interpretare le risposte del modulo, nello specifico per quanto riguarda la ricezione di nuovi SMS.
+Per il modulo NRF24L01 è stato necessario uno studio approfondito della relativa documentazione tecnica, allo scopo di sviluppare una libreria funzionante a partire da un prototipo già esistente sul web (...qui la fonte...).

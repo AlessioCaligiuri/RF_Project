@@ -1,0 +1,19 @@
+INTRODUZIONE
+Perché, come
+
+STRUTTURA DEL SISTEMA
+Divisione in base station e remote unit
+Schemi a blocchi e schemi finali
+
+SIM800
+Schema, alcune note sui comandi AT, modifiche all'alimentazione
+
+NRF24L01
+Estratto delle note dal datasheet
+Piccola nota su comunicazione SPI
+
+STM32
+Buffer circolare, flowchart programma per base station e per remote unit
+
+CONCLUSIONI
+Foto del sistema finale, esempio di applicazione con LED e relais

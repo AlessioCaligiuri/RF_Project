@@ -1,0 +1,68 @@
+SIM800L
+
+Il chip SIM800, prodotto da SIMCom, è una soluzione completa GSM/GPRS; esso supporta lo standard Quad-band 850/900/1800/1900MHz e può scambiare voce, SMS e dati con un basso consumo di potenza. E' molto piccolo (24*24*3mm) ed è agevole da utilizzare grazie al sistema Embedded AT, che ne consente la gestione via seriale asincrona scambiando comandi AT. Essi sono parte di un insieme di comandi originariamente sviluppati da Dennis Hayes per i modem fonici nel 1981 e attualmente diffusi per gestire qualsiasi tipo di modem.
+Si osservi che il SIM800 non offre funzionalità 3G/HSUPA/HSDPA+/LTE né tecnologie superiori ma è molto efficace per per inviare/ricevere SMS (che poi andranno interpretati dal microcontrollore) e aprire canali GPRS per inviare semplici pacchetti di dati (prevalentemente testo) con una portante massima di 85.6 kbps in download/upload.
+Nel nostro sistema, esso è presente su una evaluation board di produzione cinese del costo di circa 10€ (SIM800L EVB V2.0), che viene venduta con una piccola antenna GSM esterna.
+
+//Qui schema scheda SIM800L
+
+Nota - in tutta la documentazione relativa al SIM800 si utilizzano i seguenti acronimi:
+TA = Terminal Adapter: motori del GSM, ovvero il sistema SIM800L;
+TE = Terminal Equipment: chi controlla i motori GSM scambiando comandi AT, nel nostro progetto il microcontrollore STM32.
+
+x.1 Alimentazione e livelli di tensione
+
+Dallo schema si deduce che è presente un circuito per adattare i livelli di tensione della seriale (utilizzati sui pin RXD e TXD), traslandoli dal valore accettato dal SIM800 al potenziale applicato al pin VDD. Grazie a questo, l'interfacciamento elettrico è immediato e rende il dispositivo utilizzabile con con un computer, mediante un convertitore USB-TTL232, o direttamente con un microcontrollore.
+Il modulo assorbe al massimo 2A e dev'essere alimentato con una tensione tra 3.4V e 4.4 V, valori non molto comuni. Il normale 3.3V proveniente dai vari microcontrollori non è sufficiente per farlo operare correttamente; quando riesce ad accendersi, il modulo comunica via  seriale il messaggio “UNDERVOLTAGE POWER OFF” e si spegne, mentre applicando 5V compare il messaggio “OVERVOLTAGE DANGER” e si rischia di danneggiarlo irreparabilmente.
+
+//Qui foto scheda SIM800L presa da internet, originale
+
+La scheda SIM800L EVB V2.0 di produzione cinese presentava una coppia di diodi al silicio (D? e D3, 1N5408) connessi in serie alla VDD. Questi componenti sono stati aggiunti dal progettista nella speranza di risolvere in modo semplice la necessità di una specifica tensione di alimentazione, sfruttando la caduta di dette giunzioni per poter alimentare il modulino direttamente a 5V; questa idea è tutt'altro che buona, infatti la tensione diretta del diodo 1N5408 impiegato non è costante al variare della corrente, come mostra il grafico seguente tratto dal datasheet (che ne sconsiglia inoltre l'uso per nuovi progetti):
+
+//Qui curva V-I 1N5408
+
+A seguito di alcuni test, il modulino funzionava in modo tutt'altro che affidabile, resettandosi imprevedibilmente; questo comportamento è stato imputato alla cattiva stabilità della tensione di alimentazione al variare delle condizioni operative.
+Abbiamo quindi proceduto alla rimozione dei due diodi incriminati per poi cortocircuitare le relative piazzole, risolvendo definitivamente il problema con l'impiego di un alimentatore esterno. Nel nostro progetto è stato impiegato un convertitore DC-DC switching, del costo di circa 1€, basato sull'integrato XL4015 regolato a 4.2V, che accetta in ingresso tensioni fino a 36V.
+
+//qui foto diodi rimossi
+
+//Qui foto modulino switching
+
+x.2 Comunicazione seriale e comandi AT
+
+All'accensione del modulino occorre attendere qualche secondo e poi inviare il semplice comando AT; il baud rate della comunicazione seriale viene automaticamente dedotto dal SIM800, che si adegua di conseguenza rispondendo con OK. 
+Da questo momento si inizia ad interagire con il modulo inviando i comandi via seriale, ovvero caratteri ASCII seguiti da un carrage return ("\r\n"); ogni carattere ricevuto dal SIM800 viene rispedito indietro e, una volta elaborato il comando, viene aggiunta la risposta.
+
+Di seguito si riportano alcuni comandi utilizzati durante gli esperimenti:
+	AT			per iniziare la comunicazione e innescare l'auto baud rate
+	AT+CGMM 	nome del modulo
+	AT+CGMR		codice del modulo
+	AT+CPIN?	sapere se è richesto il PIN
+	AT+CNUM		numero di telefono della SIM
+	AT+CSQ		signal quality (risposta sperimentale: 10 senza antenna, 26 con antenna)
+	AT+CMGF=1	text mode, necessaria per leggere/inviare SMS
+	AT+CMGS="+39........" INVIO <messaggio> CTRL-Z 	per inviare SMS
+	AT+CMGL="ALL"	legge tutti gli SMS
+
+tutti hanno dato esito positivo, utilizzando un convertitore USB-seriale e il software PUTTY a 115200 baud.
+
+E' anche possibile ottenere l'orario dalla rete GSM; in particolare i comandi coinvolti sono:
+	AT+CLTS=1;&W abilita il servizio di orologio dalla rete e con l'opzione &W ne fa un settaggio permanente del modem (anche dopo reset HW resta)
+	AT+CFUN=1,1		resetta il modulo via software
+	AT+CLTS?		controlla se il clock via rete è attivo
+	AT+CCLK?		restituisce ora corrente
+
+I comandi effettivamente utilizzati nel nostro progetto sono invece:
+	AT+CMGF=1			imposta la modalità testo per gli SMS (che altrimenti non sarebbero direttamente leggibili come stringhe)
+	AT+CNMI=1,2,0,0,0	alla ricezione di un SMS il SIM800 mostrerà subito il numero di telefono e il testo del messaggio, senza salvarlo
+
+A seguito di questa configurazione, quando un SMS viene ricevuto, il SIM800 invia sulla seriale il numero di telefono del mittente, la data e l'ora:
+	+CMT: "+39xxxxxxxxxx","","18/11/18,17:29:54+04"
+	Testo del messaggio
+
+Il parser implementato su STM32 si basa proprio su questa struttura del messaggio.
+	
+Bibliografia
+https://www.treccarichi.net/2016/06/sim800l/ procedura per configurare ricezione SMS
+https://elementztechblog.wordpress.com/2016/12/28/getting-time-and-date-from-gsm-modem/ procedura per ottenere clock di rete
+http://simcomm2m.com/En/module/detail.aspx?id=138

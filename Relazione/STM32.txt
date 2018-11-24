@@ -1,0 +1,42 @@
+STM32
+
+I microcontrollori che gestiscono la stazione base e le unità remote sono degli STM32F103C8T6, montati su delle breakout board note con il nome di Blue Pill; di seguito alcune caratteristiche del microcontrollore:
+	- tensione di alimentazione: da 2.0V a 3.6V
+	- frequenza massima operativa: 72MHz
+	- memoria programma: flash da 64 Kbyte
+	- memoria RAM: 20 Kbyte SRAM
+	- oscillatore interno a 8 MHz
+	- 2 interfacce SPI
+	- 3 interfacce seriali USART
+
+	//qui foto schedina
+	
+Ciascuna di queste schedine, dal costo inferiore ai 2€, è inoltre provvista di:
+	- 1 LED rosso per indicare la presenza della tensione di alimentazione
+	- 1 LED verde collegato al pin PC13 del microcontrollore
+	- 1 quarzo da 8MHz per la generazione di un clock esterno
+	- 1 regolatore di tensione lineare da 3.3V
+	- 1 pulsante di reset
+	- 2 file di connettori passo 2.54mm da 20 pin ciascuno, connessi ai pin del microcontrollore e alle alimentazioni
+	- 1 connettore da 4 poli per la programmazione
+	- 1 connettore USB
+	
+La schedina può essere alimentata sia fornendo direttamente una tensione appropriata, sia attraverso il connettore USB, da cui provengono 5V (ridotti a 3.3V dal regolatore).
+
+//qui schema schedina
+
+La programmazione avviene con il programmatore ST-Link, connesso al computer via USB e al microcontrollore attraverso un protocollo proprietario basato su una comunicazione seriale sincrona (SWCLK, SWDIO).
+Lo sviluppo del codice C è stata eseguito nell'ambiente di lavoro Eclipse, con il compilatore ARM GCC, appoggiandosi alle librerie HAL (Harware Abstraction Libraries) di ST Microelectronics per STM32. Il codice di configurazione per il microcontrollore è stato generato automaticamente attraverso il tool STM32 CubeMX di ST Microelectronics.
+
+//qui screen del progetto CubeMX e di Eclipse
+
+Nella stazione base, il microcontrollore STM32 dialoga con il SIM800L attraverso la UART1 e con il modulino NRF24L01 con la SPI1. Il programma main segue in diagramma di flusso seguente:
+
+//qui diagramma di flusso
+
+La gestione della seriale per il SIM800L ha richiesto di modificare le librerie HAL di ST Microelectronics, per aggiungere la possibilità di ricevere un numero di byte non noto a priori. A tal proposito, il nuovo codice, che si integra perfettamente con in restante ambiente HAL, costruisce un buffer circolare che viene scritto nella routine di interrupt della periferica seriale del microcontrollore e viene letto dal programma main.
+
+L'unità remota, decisamente più semplice, segue il diagramma di flusso seguente:
+
+//qui diagramma di flusso
+
