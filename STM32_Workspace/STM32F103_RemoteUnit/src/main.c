@@ -117,6 +117,9 @@ int main(void)
   while (1)
   {
  		memcpy(rxData,nrf_receive_packet(&nrf), sizeof(rxData));
+ 		HAL_GPIO_TogglePin(LED_ONBOARD_GPIO_Port,LED_ONBOARD_Pin);
+
+
 		if (!strcmp(rxData, "Turn ON red LED!"))
 		  HAL_GPIO_WritePin(LED_RED_GPIO_Port,LED_RED_Pin,GPIO_PIN_RESET);
 		else if (!strcmp(rxData, "Turn OFF red LED!"))

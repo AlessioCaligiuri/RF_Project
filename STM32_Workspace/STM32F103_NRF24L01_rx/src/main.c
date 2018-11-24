@@ -63,7 +63,7 @@ static void error()
 {
     while (1)
     {
-        HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+        HAL_GPIO_TogglePin(LED_ONBOARD_GPIO_Port, LED_ONBOARD_Pin);
         HAL_Delay(100);
     }
 }
@@ -113,11 +113,26 @@ void nrf24l01_example()
 
   uint8_t rxData[32];
 
-  while(1)
+  while (1)
   {
-	  memcpy(rxData,nrf_receive_packet(&nrf), sizeof(rxData));
-	  if (!strcmp(rxData, "Emanuele ti voglio bene!! <3 <3"))
-		  HAL_GPIO_TogglePin(LED_GPIO_Port,LED_Pin);
+ 		memcpy(rxData,nrf_receive_packet(&nrf), sizeof(rxData));
+ 		HAL_GPIO_TogglePin(LED_ONBOARD_GPIO_Port,LED_ONBOARD_Pin);
+
+
+		if (!strcmp(rxData, "Turn ON red LED!"))
+		  HAL_GPIO_WritePin(LED_RED_GPIO_Port,LED_RED_Pin,GPIO_PIN_RESET);
+		else if (!strcmp(rxData, "Turn OFF red LED!"))
+		  HAL_GPIO_WritePin(LED_RED_GPIO_Port,LED_RED_Pin,GPIO_PIN_SET);
+		else if (!strcmp(rxData, "Turn ON yellow LED!"))
+		  HAL_GPIO_WritePin(LED_YELLOW_GPIO_Port,LED_YELLOW_Pin,GPIO_PIN_RESET);
+		else if (!strcmp(rxData, "Turn OFF yellow LED!"))
+		  HAL_GPIO_WritePin(LED_YELLOW_GPIO_Port,LED_YELLOW_Pin,GPIO_PIN_SET);
+		else if (!strcmp(rxData, "Turn OFF yellow LED!"))
+		  HAL_GPIO_WritePin(LED_YELLOW_GPIO_Port,LED_YELLOW_Pin,GPIO_PIN_SET);
+		else if (!strcmp(rxData, "Accendi cantiere! "))
+		  HAL_GPIO_WritePin(RELAIS_2_GPIO_Port,RELAIS_2_Pin,GPIO_PIN_RESET);
+		else if (!strcmp(rxData, "Spegni cantiere! "))
+		  HAL_GPIO_WritePin(RELAIS_2_GPIO_Port,RELAIS_2_Pin,GPIO_PIN_SET);
   }
 
 
@@ -170,8 +185,7 @@ int main(void)
   while (1)
   {
   /* USER CODE END WHILE */
-	  HAL_GPIO_TogglePin(LED_GPIO_Port,LED_Pin);
-	  HAL_Delay(500);
+	  //
 
 
 

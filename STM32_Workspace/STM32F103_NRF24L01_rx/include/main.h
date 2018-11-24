@@ -41,14 +41,32 @@
 
 /* Private define ------------------------------------------------------------*/
 
-#define LED_Pin GPIO_PIN_13
-#define LED_GPIO_Port GPIOC
+#define LED_ONBOARD_Pin GPIO_PIN_13
+#define LED_ONBOARD_GPIO_Port GPIOC
+#define LED_RED_Pin GPIO_PIN_14
+#define LED_RED_GPIO_Port GPIOC
+#define LED_YELLOW_Pin GPIO_PIN_15
+#define LED_YELLOW_GPIO_Port GPIOC
 #define NRF_IRQ_Pin GPIO_PIN_2
 #define NRF_IRQ_GPIO_Port GPIOA
 #define NRF_CE_Pin GPIO_PIN_3
 #define NRF_CE_GPIO_Port GPIOA
 #define NRF_CSN_Pin GPIO_PIN_4
 #define NRF_CSN_GPIO_Port GPIOA
+#define RELAIS_1_Pin GPIO_PIN_1
+#define RELAIS_1_GPIO_Port GPIOA
+#define RELAIS_2_Pin GPIO_PIN_0
+#define RELAIS_2_GPIO_Port GPIOA
+
+
+//#define LED_Pin GPIO_PIN_13
+//#define LED_GPIO_Port GPIOC
+//#define NRF_IRQ_Pin GPIO_PIN_1
+//#define NRF_IRQ_GPIO_Port GPIOB
+//#define NRF_CE_Pin GPIO_PIN_0
+//#define NRF_CE_GPIO_Port GPIOB
+//#define NRF_CSN_Pin GPIO_PIN_4
+//#define NRF_CSN_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 
