@@ -122,19 +122,22 @@ void HAL_UART_TxCpltCallback(UART_HandleTypeDef* huart)
 /* Configures SIM800 to receive and show sms */
 void SIM800_InitSMSReception(UART_HandleTypeDef* huart)
 {
+	/* Delay after reset */
+	HAL_Delay(10000);
+
 	/* Send AT command for the autobaudrate */
 	EAC_UART_Transmit_IT(huart,SIM800_AT,strlen(SIM800_AT));
 	while(!is_txToSIM800_Completed);
 	is_txToSIM800_Completed = false;
 
-	HAL_Delay(500);
+	HAL_Delay(100);
 
 	/* Set text mode */
 	EAC_UART_Transmit_IT(huart,SIM800_CMGF1,strlen(SIM800_CMGF1));
 	while(!is_txToSIM800_Completed);
 	is_txToSIM800_Completed = false;
 
-	HAL_Delay(500);
+	HAL_Delay(100);
 
 	// TODO: Check SIM800 response
 
@@ -143,7 +146,9 @@ void SIM800_InitSMSReception(UART_HandleTypeDef* huart)
 	while(!is_txToSIM800_Completed);
 	is_txToSIM800_Completed = false;
 
-	HAL_Delay(500);
+	HAL_Delay(100);
+
+	HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
 }
 
 /* Debug function to send to PC all the received fields */
@@ -181,6 +186,35 @@ void sendFieldsToPC()
 	  is_txToPC_Completed = false;
 }
 
+/* Debug function to send strings to remote unit  */
+void playWithRemoteUnitLeds()
+{
+	  nrf_send_packet_noack(&nrf, "Turn ON red LED!");
+	  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+
+	  HAL_Delay(1000);
+
+	  nrf_send_packet_noack(&nrf, "Turn ON yellow LED!");
+	  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+
+	  HAL_Delay(1000);
+
+	  nrf_send_packet_noack(&nrf, "Turn OFF red LED!");
+	  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+
+	  HAL_Delay(1000);
+
+	  nrf_send_packet_noack(&nrf, "Turn OFF yellow LED!");
+	  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+
+	  HAL_Delay(1000);
+
+	  nrf_send_packet_noack(&nrf, "Fuck!");
+	  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+
+	  HAL_Delay(1000);
+}
+
 int main(void)
 {
   /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
@@ -205,9 +239,9 @@ int main(void)
   /* Infinite loop */
   while (1)
   {
+	  HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
 
-	  nrf_send_packet_noack(&nrf, "a");
-	  continue;
+	  //playWithRemoteUnitLeds();
 
 	  while(EAC_UART_DequeueRxByte(&huart1,&rxByte_fromSIM800))
 	  {
